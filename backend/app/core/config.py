@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     )
 
     telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
     allowed_telegram_id: int = 0
 
     jwt_secret: str = ""

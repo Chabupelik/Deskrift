@@ -9,8 +9,10 @@ from fastapi import Depends
 from app.core.config import Settings, get_settings
 from app.core.security import create_jwt
 from app.db.redis import RedisClient
+from app.integrations.telegram import telegram_client
 from app.schemas.auth import LoginCheckResponse, LoginInitResponse
 from app.schemas.telegram import TelegramUpdate
+from app.websocket.manager import manager
 
 
 class AuthService:
@@ -26,6 +28,32 @@ class AuthService:
         login_id = uuid.uuid4().hex
         expires_in = 120
         await self.redis.set(f"login_request:{login_id}", "pending", ex=expires_in)
+
+        text = (
+            "<b>🔔 Попытка входа в Deskrift</b>\n\n"
+            f"<b>IP адрес:</b> <code>{client_ip}</code>\n\n"
+            "Разрешить доступ к рабочему столу?"
+        )
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "✅ Разрешить",
+                        "callback_data": f"approve:{login_id}",
+                    },
+                    {
+                        "text": "❌ Отклонить",
+                        "callback_data": f"reject:{login_id}",
+                    },
+                ]
+            ]
+        }
+        await telegram_client.send_message(
+            chat_id=self.settings.allowed_telegram_id,
+            text=text,
+            reply_markup=reply_markup,
+        )
+
         return LoginInitResponse(login_id=login_id, expires_in=expires_in)
 
     async def check_login(self, login_id: str) -> LoginCheckResponse:
@@ -54,7 +82,86 @@ class AuthService:
         return LoginCheckResponse(status="pending")
 
     async def process_webhook(self, update: TelegramUpdate) -> None:
-        pass
+        if not update.callback_query:
+            return
+
+        cq = update.callback_query
+        if cq.from_user.id != self.settings.allowed_telegram_id:
+            await telegram_client.answer_callback_query(
+                callback_query_id=cq.id,
+                text="Доступ запрещен",
+            )
+            return
+
+        if not cq.data:
+            return
+
+        chat_id = (
+            cq.message.chat.id if cq.message else self.settings.allowed_telegram_id
+        )
+        message_id = cq.message.message_id if cq.message else None
+
+        if cq.data.startswith("approve:"):
+            login_id = cq.data.split(":", 1)[1]
+            current_status = await self.redis.get(f"login_request:{login_id}")
+            if current_status == "pending":
+                await self.redis.set(f"login_request:{login_id}", "approved", ex=120)
+                await telegram_client.answer_callback_query(
+                    callback_query_id=cq.id,
+                    text="Вход разрешен",
+                )
+                if message_id:
+                    await telegram_client.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        text="<b>✅ Вход разрешен</b>",
+                        reply_markup={
+                            "inline_keyboard": [
+                                [
+                                    {
+                                        "text": "🛑 Завершить сессию",
+                                        "callback_data": f"revoke:{self.settings.allowed_telegram_id}",
+                                    }
+                                ]
+                            ]
+                        },
+                    )
+            else:
+                await telegram_client.answer_callback_query(
+                    callback_query_id=cq.id,
+                    text="Запрос устарел или уже обработан",
+                )
+
+        elif cq.data.startswith("reject:"):
+            login_id = cq.data.split(":", 1)[1]
+            await self.redis.set(f"login_request:{login_id}", "rejected", ex=60)
+            await telegram_client.answer_callback_query(
+                callback_query_id=cq.id,
+                text="Вход отклонен",
+            )
+            if message_id:
+                await telegram_client.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text="<b>❌ Вход отклонен</b>",
+                    reply_markup={"inline_keyboard": []},
+                )
+
+        elif cq.data.startswith("revoke:"):
+            user_id = cq.data.split(":", 1)[1]
+            await self.redis.delete(f"active_session:{user_id}")
+            manager.disconnect_browser()
+            await telegram_client.answer_callback_query(
+                callback_query_id=cq.id,
+                text="Сессия завершена",
+            )
+            if message_id:
+                await telegram_client.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text="<b>🛑 Сессия завершена</b>",
+                    reply_markup={"inline_keyboard": []},
+                )
 
 
 def get_auth_service(

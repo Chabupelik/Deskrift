@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.dependencies import AuthRateLimit, ClientIP
+from app.api.dependencies import AuthRateLimit, ClientIP, TelegramWebhookSecret
 from app.schemas.auth import LoginCheckResponse, LoginInitResponse
 from app.schemas.common import StatusResponse
 from app.schemas.telegram import TelegramUpdate
@@ -32,6 +32,7 @@ async def check_login(
 async def telegram_webhook(
     update: TelegramUpdate,
     auth_service: AuthSrv,
+    _: TelegramWebhookSecret,
 ) -> StatusResponse:
     await auth_service.process_webhook(update)
     return StatusResponse()

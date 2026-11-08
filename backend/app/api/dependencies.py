@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, WebSocket, status
+from fastapi import Depends, Header, HTTPException, Request, WebSocket, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.requests import HTTPConnection
 
@@ -72,6 +72,25 @@ async def ws_pc_auth(websocket: WebSocket, token: str) -> bool:
         await websocket.close(code=4001)
         return False
     return True
+
+
+def verify_telegram_webhook_secret(
+    x_telegram_bot_api_secret_token: Annotated[
+        str | None, Header(alias="X-Telegram-Bot-Api-Secret-Token")
+    ] = None,
+) -> None:
+    settings = get_settings()
+    if (
+        settings.telegram_webhook_secret
+        and x_telegram_bot_api_secret_token != settings.telegram_webhook_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
+
+
+TelegramWebhookSecret = Annotated[None, Depends(verify_telegram_webhook_secret)]
 
 
 class RateLimiter:
