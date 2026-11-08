@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
@@ -20,8 +20,12 @@ def verify_telegram_init_data(init_data: str) -> dict | None:
         return None
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
-    secret_key = hmac.new(b"WebAppData", settings.telegram_bot_token.encode(), hashlib.sha256).digest()
-    computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    secret_key = hmac.new(
+        b"WebAppData", settings.telegram_bot_token.encode(), hashlib.sha256
+    ).digest()
+    computed_hash = hmac.new(
+        secret_key, data_check_string.encode(), hashlib.sha256
+    ).hexdigest()
 
     if not hmac.compare_digest(computed_hash, received_hash):
         return None
@@ -38,7 +42,7 @@ def create_jwt(telegram_id: int) -> str:
     settings = get_settings()
     payload = {
         "sub": str(telegram_id),
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes),
+        "exp": datetime.now(UTC) + timedelta(minutes=settings.jwt_expire_minutes),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
@@ -50,4 +54,3 @@ def decode_jwt(token: str) -> int | None:
         return int(payload["sub"])
     except Exception:
         return None
-

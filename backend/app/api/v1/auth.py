@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from fastapi import APIRouter, HTTPException
 
 from app.core.config import get_settings
@@ -20,6 +18,7 @@ async def telegram_auth(body: AuthRequest) -> TokenResponse:
         raise HTTPException(status_code=401, detail="Invalid Telegram data")
 
     import json as _json
+
     user_info = _json.loads(user_data.get("user", "{}"))
     telegram_id = user_info.get("id")
 
@@ -28,4 +27,3 @@ async def telegram_auth(body: AuthRequest) -> TokenResponse:
 
     token = create_jwt(telegram_id)
     return TokenResponse(access_token=token)
-

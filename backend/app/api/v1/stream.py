@@ -38,4 +38,3 @@ async def browser_websocket(websocket: WebSocket, token: str = Query(...)):
             await manager.send_to_pc(data.encode())
     except WebSocketDisconnect:
         manager.disconnect_browser()
-
