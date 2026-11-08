@@ -30,6 +30,15 @@ class ConnectionManager:
         self.browser = None
         logger.info("Browser disconnected")
 
+    async def close_browser(self) -> None:
+        if self.browser:
+            try:
+                await self.browser.close(code=1000)
+            except Exception:
+                pass
+            self.browser = None
+            logger.info("Browser connection closed")
+
     async def send_to_browser(self, data: bytes) -> None:
         if self.browser:
             try:

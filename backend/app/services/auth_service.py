@@ -62,6 +62,12 @@ class AuthService:
 
         return LoginCheckResponse(status="pending")
 
+    async def revoke_token(self, token: str, telegram_id: int) -> None:
+        await self.redis.set(
+            f"blacklist:{token}", "1", ex=self.settings.jwt_expire_minutes * 60
+        )
+        await self.redis.delete(f"active_session:{telegram_id}")
+
     async def process_webhook(self, update: TelegramUpdate) -> None:
         if not update.callback_query:
             return
@@ -117,9 +123,16 @@ class AuthService:
                 )
 
         elif cq.data.startswith("revoke:"):
-            user_id = cq.data.split(":", 1)[1]
+            user_id = int(cq.data.split(":", 1)[1])
+            token = await self.redis.get(f"active_session:{user_id}")
+            if token:
+                await self.redis.set(
+                    f"blacklist:{token}",
+                    "1",
+                    ex=self.settings.jwt_expire_minutes * 60,
+                )
             await self.redis.delete(f"active_session:{user_id}")
-            manager.disconnect_browser()
+            await manager.close_browser()
             await telegram_client.answer_callback_query(
                 callback_query_id=cq.id,
                 text="Сессия завершена",

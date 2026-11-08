@@ -35,10 +35,12 @@ def get_client_ip(request: HTTPConnection) -> str:
 ClientIP = Annotated[str, Depends(get_client_ip)]
 
 
-def get_current_user(
+async def get_current_user(
+    redis: RedisClient,
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
 ) -> int:
-    telegram_id = decode_jwt(credentials.credentials)
+    token = credentials.credentials
+    telegram_id = decode_jwt(token)
     if telegram_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
@@ -48,13 +50,26 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
+    if await redis.get(f"blacklist:{token}"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked"
+        )
+    active_token = await redis.get(f"active_session:{telegram_id}")
+    if active_token != token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired"
+        )
     return telegram_id
 
 
 CurrentUser = Annotated[int, Depends(get_current_user)]
 
 
-async def ws_auth(websocket: WebSocket, token: str) -> int | None:
+async def ws_auth(
+    websocket: WebSocket,
+    token: str,
+    redis: RedisClient,
+) -> int | None:
     telegram_id = decode_jwt(token)
     if telegram_id is None:
         await websocket.close(code=4001)
@@ -62,6 +77,13 @@ async def ws_auth(websocket: WebSocket, token: str) -> int | None:
     settings = get_settings()
     if telegram_id != settings.allowed_telegram_id:
         await websocket.close(code=4003)
+        return None
+    if await redis.get(f"blacklist:{token}"):
+        await websocket.close(code=4001)
+        return None
+    active_token = await redis.get(f"active_session:{telegram_id}")
+    if active_token != token:
+        await websocket.close(code=4001)
         return None
     return telegram_id
 
