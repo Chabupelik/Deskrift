@@ -136,9 +136,15 @@ TelegramWebhookSecret = Annotated[None, Depends(verify_telegram_webhook_secret)]
 
 
 class RateLimiter:
-    def __init__(self, max_requests: int = 60, window_seconds: int = 60) -> None:
+    def __init__(
+        self,
+        max_requests: int = 60,
+        window_seconds: int = 60,
+        detail: str = "Слишком много запросов. Подождите, попробуйте позже.",
+    ) -> None:
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        self.detail = detail
 
     async def __call__(
         self,
@@ -157,14 +163,24 @@ class RateLimiter:
         current_requests = res[0]
 
         if current_requests > self.max_requests:
+            logger.warning(
+                "Rate limit exceeded for IP %s on %s (%s requests)",
+                ip,
+                path,
+                current_requests,
+            )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Слишком много запросов. Подождите, попробуйте позже.",
+                detail=self.detail,
             )
 
 
 rate_limiter = RateLimiter(max_requests=60, window_seconds=60)
 RateLimit = Annotated[None, Depends(rate_limiter)]
 
-auth_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+auth_rate_limiter = RateLimiter(
+    max_requests=3,
+    window_seconds=600,
+    detail="Слишком много попыток входа. Допустимо не более 3 запросов за 10 минут.",
+)
 AuthRateLimit = Annotated[None, Depends(auth_rate_limiter)]

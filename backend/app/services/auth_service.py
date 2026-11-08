@@ -5,7 +5,7 @@ import uuid
 from typing import Annotated
 
 import redis.asyncio as aioredis
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 
 from app.core.config import Settings, get_settings
 from app.core.security import create_jwt
@@ -28,9 +28,17 @@ class AuthService:
         self.settings = settings or get_settings()
 
     async def request_login(self, client_ip: str) -> LoginInitResponse:
+        active_request = await self.redis.get("pending_login_request")
+        if active_request:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Запрос на вход уже ожидает подтверждения в Telegram",
+            )
+
         login_id = uuid.uuid4().hex
         expires_in = 120
         await self.redis.set(f"login_request:{login_id}", "pending", ex=expires_in)
+        await self.redis.set("pending_login_request", login_id, ex=expires_in)
 
         await telegram_client.send_login_request(
             chat_id=self.settings.allowed_telegram_id,
@@ -47,6 +55,7 @@ class AuthService:
 
         if status_val == "approved":
             await self.redis.delete(f"login_request:{login_id}")
+            await self.redis.delete("pending_login_request")
             token = create_jwt(self.settings.allowed_telegram_id)
             await self.redis.set(
                 f"active_session:{self.settings.allowed_telegram_id}",
@@ -61,6 +70,7 @@ class AuthService:
 
         if status_val == "rejected":
             await self.redis.delete(f"login_request:{login_id}")
+            await self.redis.delete("pending_login_request")
             return LoginCheckResponse(status="rejected")
 
         return LoginCheckResponse(status="pending")
@@ -98,6 +108,7 @@ class AuthService:
             current_status = await self.redis.get(f"login_request:{login_id}")
             if current_status == "pending":
                 await self.redis.set(f"login_request:{login_id}", "approved", ex=120)
+                await self.redis.delete("pending_login_request")
                 await telegram_client.answer_callback_query(
                     callback_query_id=cq.id,
                     text="Вход разрешен",
@@ -117,6 +128,7 @@ class AuthService:
         elif cq.data.startswith("reject:"):
             login_id = cq.data.split(":", 1)[1]
             await self.redis.set(f"login_request:{login_id}", "rejected", ex=60)
+            await self.redis.delete("pending_login_request")
             await telegram_client.answer_callback_query(
                 callback_query_id=cq.id,
                 text="Вход отклонен",
