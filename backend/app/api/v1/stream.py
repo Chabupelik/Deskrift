@@ -1,67 +1,26 @@
 from __future__ import annotations
 
-import logging
+from fastapi import APIRouter, WebSocket
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from app.api.dependencies import WSBrowserAuth, WSPCAuth
+from app.services.stream_service import StreamSrv
 
-from app.api.dependencies import ws_auth, ws_pc_auth
-from app.db.redis import RedisClient
-from app.services.auth_service import AuthSrv
-from app.websocket.manager import manager
-
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["stream"])
 
 
 @router.websocket("/ws/pc")
 async def pc_websocket(
     websocket: WebSocket,
-    token: str = Query(...),
+    _: WSPCAuth,
+    stream_service: StreamSrv,
 ) -> None:
-    if not await ws_pc_auth(websocket, token):
-        return
-
-    await manager.connect_pc(websocket)
-    try:
-        while True:
-            data = await websocket.receive_bytes()
-            await manager.send_to_browser(data)
-    except WebSocketDisconnect as exc:
-        logger.info("PC websocket disconnected: code=%s", exc.code)
-    except Exception as exc:
-        logger.exception("Unexpected error in PC websocket: %s", exc)
-    finally:
-        manager.disconnect_pc()
+    await stream_service.handle_pc_stream(websocket)
 
 
 @router.websocket("/ws/browser")
 async def browser_websocket(
     websocket: WebSocket,
-    redis: RedisClient,
-    auth_service: AuthSrv,
-    token: str = Query(...),
+    session: WSBrowserAuth,
+    stream_service: StreamSrv,
 ) -> None:
-    telegram_id = await ws_auth(websocket, token, redis)
-    if telegram_id is None:
-        return
-
-    await manager.connect_browser(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await manager.send_to_pc(data.encode())
-    except WebSocketDisconnect as exc:
-        logger.info(
-            "Browser websocket disconnected: code=%s, user=%s",
-            exc.code,
-            telegram_id,
-        )
-    except Exception as exc:
-        logger.exception(
-            "Unexpected error in browser websocket for user %s: %s",
-            telegram_id,
-            exc,
-        )
-    finally:
-        manager.disconnect_browser()
-        await auth_service.revoke_token(token, telegram_id)
+    await stream_service.handle_browser_stream(websocket, session)

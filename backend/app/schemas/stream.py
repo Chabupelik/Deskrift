@@ -16,3 +16,8 @@ class InputEvent(BaseModel):
 class StreamStatusResponse(BaseModel):
     pc_online: bool
     quality: str
+
+
+class WSBrowserSession(BaseModel):
+    telegram_id: int
+    token: str

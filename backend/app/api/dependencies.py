@@ -3,13 +3,22 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, Request, WebSocket, status
+from fastapi import (
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    WebSocketException,
+    status,
+)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.requests import HTTPConnection
 
 from app.core.config import get_settings
 from app.core.security import decode_jwt
 from app.db.redis import RedisClient
+from app.schemas.stream import WSBrowserSession
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer()
@@ -67,43 +76,44 @@ async def get_current_user(
 CurrentUser = Annotated[int, Depends(get_current_user)]
 
 
-async def ws_auth(
-    websocket: WebSocket,
-    token: str,
+async def authenticate_ws_browser(
     redis: RedisClient,
-) -> int | None:
+    token: str = Query(...),
+) -> WSBrowserSession:
     telegram_id = decode_jwt(token)
     if telegram_id is None:
         logger.warning("Browser websocket auth failed: invalid JWT token")
-        await websocket.close(code=4001)
-        return None
+        raise WebSocketException(code=4001, reason="Invalid token")
     settings = get_settings()
     if telegram_id != settings.allowed_telegram_id:
         logger.warning("Browser websocket auth failed: forbidden user %s", telegram_id)
-        await websocket.close(code=4003)
-        return None
+        raise WebSocketException(code=4003, reason="Access denied")
     if await redis.get(f"blacklist:{token}"):
         logger.warning("Browser websocket auth failed: token is blacklisted")
-        await websocket.close(code=4001)
-        return None
+        raise WebSocketException(code=4001, reason="Token revoked")
     active_token = await redis.get(f"active_session:{telegram_id}")
     if active_token != token:
         logger.warning(
             "Browser websocket auth failed: session mismatch or expired for user %s",
             telegram_id,
         )
-        await websocket.close(code=4001)
-        return None
-    return telegram_id
+        raise WebSocketException(code=4001, reason="Session expired")
+    return WSBrowserSession(telegram_id=telegram_id, token=token)
 
 
-async def ws_pc_auth(websocket: WebSocket, token: str) -> bool:
+WSBrowserAuth = Annotated[WSBrowserSession, Depends(authenticate_ws_browser)]
+
+
+def verify_ws_pc_token(
+    token: str = Query(...),
+) -> None:
     settings = get_settings()
     if token != settings.pc_secret:
         logger.warning("PC websocket auth failed: invalid secret")
-        await websocket.close(code=4001)
-        return False
-    return True
+        raise WebSocketException(code=4001, reason="Invalid secret")
+
+
+WSPCAuth = Annotated[None, Depends(verify_ws_pc_token)]
 
 
 def verify_telegram_webhook_secret(
