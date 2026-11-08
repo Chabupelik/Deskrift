@@ -7,9 +7,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      common_net:
-        aliases:
-          - deskrift_redis
+      - deskrift_internal
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -24,11 +22,12 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      REDIS_HOST: deskrift_redis
+      REDIS_HOST: redis
       TZ: Europe/Moscow
     ports:
       - "127.0.0.1:5060:8000"
     networks:
+      - deskrift_internal
       - common_net
     depends_on:
       redis:
@@ -38,5 +37,6 @@ volumes:
   redis_data:
 
 networks:
+  deskrift_internal:
   common_net:
     external: true
