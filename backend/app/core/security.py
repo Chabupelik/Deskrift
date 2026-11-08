@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 import jwt
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def create_jwt(telegram_id: int) -> str:
@@ -21,5 +24,9 @@ def decode_jwt(token: str) -> int | None:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
         return int(payload["sub"])
-    except Exception:
+    except jwt.PyJWTError as exc:
+        logger.warning("JWT validation failed: %s", exc)
+        return None
+    except Exception as exc:
+        logger.exception("Unexpected error decoding JWT: %s", exc)
         return None

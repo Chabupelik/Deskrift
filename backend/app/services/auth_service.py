@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -13,6 +14,8 @@ from app.integrations.telegram import telegram_client
 from app.schemas.auth import LoginCheckResponse, LoginInitResponse
 from app.schemas.telegram import TelegramUpdate
 from app.websocket.manager import manager
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -126,12 +129,9 @@ class AuthService:
             user_id = int(cq.data.split(":", 1)[1])
             token = await self.redis.get(f"active_session:{user_id}")
             if token:
-                await self.redis.set(
-                    f"blacklist:{token}",
-                    "1",
-                    ex=self.settings.jwt_expire_minutes * 60,
-                )
-            await self.redis.delete(f"active_session:{user_id}")
+                await self.revoke_token(token, user_id)
+            else:
+                await self.redis.delete(f"active_session:{user_id}")
             await manager.close_browser()
             await telegram_client.answer_callback_query(
                 callback_query_id=cq.id,

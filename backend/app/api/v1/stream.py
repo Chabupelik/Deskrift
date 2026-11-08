@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.api.dependencies import ws_auth, ws_pc_auth
@@ -7,6 +9,7 @@ from app.db.redis import RedisClient
 from app.services.auth_service import AuthSrv
 from app.websocket.manager import manager
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["stream"])
 
 
@@ -23,8 +26,10 @@ async def pc_websocket(
         while True:
             data = await websocket.receive_bytes()
             await manager.send_to_browser(data)
-    except WebSocketDisconnect:
-        pass
+    except WebSocketDisconnect as exc:
+        logger.info("PC websocket disconnected: code=%s", exc.code)
+    except Exception as exc:
+        logger.exception("Unexpected error in PC websocket: %s", exc)
     finally:
         manager.disconnect_pc()
 
@@ -45,8 +50,18 @@ async def browser_websocket(
         while True:
             data = await websocket.receive_text()
             await manager.send_to_pc(data.encode())
-    except WebSocketDisconnect:
-        pass
+    except WebSocketDisconnect as exc:
+        logger.info(
+            "Browser websocket disconnected: code=%s, user=%s",
+            exc.code,
+            telegram_id,
+        )
+    except Exception as exc:
+        logger.exception(
+            "Unexpected error in browser websocket for user %s: %s",
+            telegram_id,
+            exc,
+        )
     finally:
         manager.disconnect_browser()
         await auth_service.revoke_token(token, telegram_id)

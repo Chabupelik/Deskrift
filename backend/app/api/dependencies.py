@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, WebSocket, status
@@ -10,6 +11,7 @@ from app.core.config import get_settings
 from app.core.security import decode_jwt
 from app.db.redis import RedisClient
 
+logger = logging.getLogger(__name__)
 bearer = HTTPBearer()
 
 
@@ -72,17 +74,24 @@ async def ws_auth(
 ) -> int | None:
     telegram_id = decode_jwt(token)
     if telegram_id is None:
+        logger.warning("Browser websocket auth failed: invalid JWT token")
         await websocket.close(code=4001)
         return None
     settings = get_settings()
     if telegram_id != settings.allowed_telegram_id:
+        logger.warning("Browser websocket auth failed: forbidden user %s", telegram_id)
         await websocket.close(code=4003)
         return None
     if await redis.get(f"blacklist:{token}"):
+        logger.warning("Browser websocket auth failed: token is blacklisted")
         await websocket.close(code=4001)
         return None
     active_token = await redis.get(f"active_session:{telegram_id}")
     if active_token != token:
+        logger.warning(
+            "Browser websocket auth failed: session mismatch or expired for user %s",
+            telegram_id,
+        )
         await websocket.close(code=4001)
         return None
     return telegram_id
@@ -91,6 +100,7 @@ async def ws_auth(
 async def ws_pc_auth(websocket: WebSocket, token: str) -> bool:
     settings = get_settings()
     if token != settings.pc_secret:
+        logger.warning("PC websocket auth failed: invalid secret")
         await websocket.close(code=4001)
         return False
     return True

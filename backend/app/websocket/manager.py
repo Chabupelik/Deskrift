@@ -34,8 +34,8 @@ class ConnectionManager:
         if self.browser:
             try:
                 await self.browser.close(code=1000)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to close browser websocket cleanly: %s", exc)
             self.browser = None
             logger.info("Browser connection closed")
 
@@ -43,14 +43,16 @@ class ConnectionManager:
         if self.browser:
             try:
                 await self.browser.send_bytes(data)
-            except Exception:
+            except Exception as exc:
+                logger.warning("Failed to send bytes to browser: %s", exc)
                 self.disconnect_browser()
 
     async def send_to_pc(self, data: bytes) -> None:
         if self.pc:
             try:
                 await self.pc.send_bytes(data)
-            except Exception:
+            except Exception as exc:
+                logger.warning("Failed to send bytes to PC: %s", exc)
                 self.disconnect_pc()
 
     @property

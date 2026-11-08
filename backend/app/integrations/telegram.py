@@ -66,7 +66,10 @@ class TelegramClient:
 
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.post(url, json=payload)
+                res = await client.post(url, json=payload)
+                data = res.json()
+                if not data.get("ok"):
+                    logger.error("Telegram edit_message_text failed: %s", data)
         except Exception as e:
             logger.error("Telegram edit_message_text error: %s", e)
 
@@ -87,7 +90,10 @@ class TelegramClient:
 
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.post(url, json=payload)
+                res = await client.post(url, json=payload)
+                data = res.json()
+                if not data.get("ok"):
+                    logger.error("Telegram answer_callback_query failed: %s", data)
         except Exception as e:
             logger.error("Telegram answer_callback_query error: %s", e)
 
