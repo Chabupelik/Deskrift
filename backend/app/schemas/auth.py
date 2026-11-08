@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
-class AuthRequest(BaseModel):
-    init_data: str
+class LoginInitResponse(BaseModel):
+    login_id: str
+    expires_in: int
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class LoginCheckResponse(BaseModel):
+    status: Literal["pending", "approved", "rejected", "expired"]
+    access_token: str | None = None
+    token_type: str | None = None

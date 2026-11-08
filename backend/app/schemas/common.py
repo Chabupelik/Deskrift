@@ -16,3 +16,7 @@ class ResponseError(BaseModel):
     status: str = "error"
     message: str
     details: list[str] | None = None
+
+
+class StatusResponse(BaseModel):
+    status: str = "ok"

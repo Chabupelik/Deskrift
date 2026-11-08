@@ -138,7 +138,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get(
     "/health",
-    response_model=ResponseOK[dict],
+    response_model=ResponseOK[dict[str, str]],
     summary="Liveness check",
 )
 @app.get(
@@ -151,7 +151,7 @@ async def health_check():
 
 @app.get(
     "/ready",
-    response_model=ResponseOK[dict],
+    response_model=ResponseOK[dict[str, str]],
     summary="Readiness check",
 )
 async def ready_check(

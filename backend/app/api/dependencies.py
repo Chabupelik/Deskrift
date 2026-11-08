@@ -32,6 +32,9 @@ def get_client_ip(request: HTTPConnection) -> str:
     return "unknown"
 
 
+ClientIP = Annotated[str, Depends(get_client_ip)]
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer),
 ) -> int:
