@@ -5,4 +5,4 @@ pydantic-settings
 pyjwt[crypto]
 httpx
 python-dotenv
-
+redis>=5.0.0

@@ -2,11 +2,31 @@ from __future__ import annotations
 
 from fastapi import Depends, HTTPException, WebSocket, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from starlette.requests import HTTPConnection
 
 from app.core.config import get_settings
 from app.core.security import decode_jwt
 
 bearer = HTTPBearer()
+
+
+def get_client_ip(request: HTTPConnection) -> str:
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+
+    x_real_ip = request.headers.get("x-real-ip")
+    if x_real_ip:
+        return x_real_ip.strip()
+
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+
+    if request.client and request.client.host:
+        return request.client.host
+
+    return "unknown"
 
 
 def get_current_user(
@@ -26,7 +46,6 @@ def get_current_user(
 
 
 async def ws_auth(websocket: WebSocket, token: str) -> int | None:
-    """Аутентификация для WebSocket соединений браузера."""
     telegram_id = decode_jwt(token)
     if telegram_id is None:
         await websocket.close(code=4001)
@@ -39,7 +58,6 @@ async def ws_auth(websocket: WebSocket, token: str) -> int | None:
 
 
 async def ws_pc_auth(websocket: WebSocket, token: str) -> bool:
-    """Аутентификация для WebSocket соединений desktop агента."""
     settings = get_settings()
     if token != settings.pc_secret:
         await websocket.close(code=4001)

@@ -14,16 +14,16 @@ import (
 )
 
 const (
-	chunkSize      = 32 * 1024 // 32KB chunks
+	chunkSize      = 32 * 1024
 	reconnectDelay = 3 * time.Second
 )
 
 type Client struct {
-	cfg     *config.Config
-	enc     *encoder.Encoder
-	input   *input.Handler
-	conn    *websocket.Conn
-	done    chan struct{}
+	cfg   *config.Config
+	enc   *encoder.Encoder
+	input *input.Handler
+	conn  *websocket.Conn
+	done  chan struct{}
 }
 
 func New(cfg *config.Config, enc *encoder.Encoder, inp *input.Handler) *Client {
@@ -66,13 +66,11 @@ func (c *Client) connect() error {
 
 	log.Println("Connected to relay server")
 
-	// Запускаем ffmpeg
 	if err := c.enc.Start(); err != nil {
 		return err
 	}
 	defer c.enc.Stop()
 
-	// Горутина: читаем input события от браузера
 	go func() {
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -83,7 +81,6 @@ func (c *Client) connect() error {
 		}
 	}()
 
-	// Основной поток: читаем H.264 из ffmpeg → отправляем на сервер
 	buf := make([]byte, chunkSize)
 	for {
 		n, err := c.enc.Stdout.Read(buf)
@@ -106,4 +103,3 @@ func (c *Client) Stop() {
 		c.conn.Close()
 	}
 }
-

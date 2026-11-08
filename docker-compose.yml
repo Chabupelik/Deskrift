@@ -1,4 +1,19 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: deskrift_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - common_net
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -7,11 +22,18 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      REDIS_HOST: redis
       TZ: Europe/Moscow
     ports:
       - "127.0.0.1:5060:8000"
     networks:
       - common_net
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:
 
 networks:
   common_net:

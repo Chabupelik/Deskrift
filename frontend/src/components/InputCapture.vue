@@ -5,7 +5,6 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 
-// ws инжектируется из StreamView (TODO: через store)
 const ws = inject<WebSocket>('ws')
 
 function send(data: object) {

@@ -14,7 +14,6 @@ const auth = useAuthStore()
 const router = useRouter()
 
 onMounted(() => {
-  // Если пришли из Telegram WebApp — initData уже есть
   const tg = (window as any).Telegram?.WebApp
   if (tg?.initData) {
     auth.loginWithTelegram(tg.initData).then(() => {

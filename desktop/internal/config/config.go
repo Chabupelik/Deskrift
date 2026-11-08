@@ -7,8 +7,7 @@ import (
 type Config struct {
 	ServerURL string
 	PCSecret  string
-	// Качество: low | medium | high
-	Quality string
+	Quality   string
 }
 
 func Load() *Config {

@@ -21,7 +21,6 @@ onMounted(() => {
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
 
-  // Инициализируем WebCodecs VideoDecoder
   decoder = new VideoDecoder({
     output(frame) {
       ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
@@ -33,11 +32,10 @@ onMounted(() => {
   })
 
   decoder.configure({
-    codec: 'avc1.42001f', // H.264 Baseline
+    codec: 'avc1.42001f',
     hardwareAcceleration: 'prefer-hardware',
   })
 
-  // Подключаемся к relay
   const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/browser?token=${auth.token}`
   ws = new WebSocket(wsUrl)
   ws.binaryType = 'arraybuffer'
@@ -47,7 +45,7 @@ onMounted(() => {
 
   ws.onmessage = (event) => {
     const chunk = new EncodedVideoChunk({
-      type: 'key', // TODO: парсить NAL unit type
+      type: 'key',
       timestamp: performance.now() * 1000,
       data: event.data,
     })
@@ -68,4 +66,3 @@ onUnmounted(() => {
   height: 100%;
 }
 </style>
-

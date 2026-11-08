@@ -35,7 +35,7 @@ type mouseInput struct {
 	dwFlags   uint32
 	time      uint32
 	extraInfo uintptr
-	_         [8]byte // padding
+	_         [8]byte
 }
 
 type keyboardInput struct {
@@ -45,7 +45,7 @@ type keyboardInput struct {
 	dwFlags   uint32
 	time      uint32
 	extraInfo uintptr
-	_         [8]byte // padding
+	_         [8]byte
 }
 
 type InputEvent struct {

@@ -11,7 +11,6 @@ from app.core.config import get_settings
 
 
 def verify_telegram_init_data(init_data: str) -> dict | None:
-    """Верифицирует Telegram WebApp initData и возвращает данные пользователя."""
     settings = get_settings()
 
     params = dict(pair.split("=", 1) for pair in init_data.split("&") if "=" in pair)
@@ -30,7 +29,6 @@ def verify_telegram_init_data(init_data: str) -> dict | None:
     if not hmac.compare_digest(computed_hash, received_hash):
         return None
 
-    # Проверяем что initData не старше 24 часов
     auth_date = int(params.get("auth_date", 0))
     if time.time() - auth_date > 86400:
         return None

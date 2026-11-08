@@ -8,13 +8,12 @@ import (
 	"github.com/chabupelik/deskrift/internal/config"
 )
 
-// QualityProfiles — параметры ffmpeg для каждого режима
 var QualityProfiles = map[string][]string{
 	"high": {
 		"-f", "gdigrab", "-framerate", "60", "-i", "desktop",
 		"-c:v", "h264_nvenc", "-preset", "p1", "-tune", "ll",
 		"-b:v", "15M", "-maxrate", "15M", "-bufsize", "5M",
-		"-g", "60", // keyframe каждые 2 сек
+		"-g", "60",
 		"-f", "h264", "pipe:1",
 	},
 	"medium": {
@@ -76,4 +75,3 @@ func (e *Encoder) SetQuality(quality string) error {
 	e.cfg.Quality = quality
 	return e.Start()
 }
-
