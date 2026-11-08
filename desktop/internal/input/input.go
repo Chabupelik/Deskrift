@@ -14,6 +14,7 @@ var (
 	procSetCursorPos     = user32.NewProc("SetCursorPos")
 	procMouseEvent       = user32.NewProc("mouse_event")
 	procKeybdEvent       = user32.NewProc("keybd_event")
+	procMapVirtualKey    = user32.NewProc("MapVirtualKeyW")
 	procOpenClipboard    = user32.NewProc("OpenClipboard")
 	procCloseClipboard   = user32.NewProc("CloseClipboard")
 	procEmptyClipboard   = user32.NewProc("EmptyClipboard")
@@ -33,7 +34,8 @@ const (
 	mouseeventfMiddleup   = 0x0040
 	mouseeventfWheel      = 0x0800
 
-	keyeventfKeyup = 0x0002
+	keyeventfExtendedkey = 0x0001
+	keyeventfKeyup       = 0x0002
 
 	vkControl = 0x11
 	vkV       = 0x56
@@ -129,10 +131,14 @@ func (h *Handler) mouseWheel(delta int) {
 
 func (h *Handler) keyEvent(vkCode int, down bool) {
 	var flags uintptr
-	if !down {
-		flags = keyeventfKeyup
+	if vkCode >= 0x21 && vkCode <= 0x28 {
+		flags |= keyeventfExtendedkey
 	}
-	procKeybdEvent.Call(uintptr(vkCode), 0, flags, 0)
+	if !down {
+		flags |= keyeventfKeyup
+	}
+	scanCode, _, _ := procMapVirtualKey.Call(uintptr(vkCode), 0)
+	procKeybdEvent.Call(uintptr(vkCode), scanCode, flags, 0)
 }
 
 func (h *Handler) pasteText(text string) {
