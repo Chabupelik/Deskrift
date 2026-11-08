@@ -123,8 +123,6 @@ async function getSupportedH264Codec(): Promise<string> {
     'avc1.42e02a',
     'avc1.42001f',
     'avc1.42e01f',
-    'avc1.4d002a',
-    'avc1.64002a',
   ]
   if (typeof VideoDecoder !== 'undefined' && 'isConfigSupported' in VideoDecoder) {
     for (const codec of candidates) {
@@ -249,25 +247,11 @@ onMounted(async () => {
   const ctx = canvas.getContext('2d', { alpha: false })!
 
   let hasKeyframe = false
-  let pendingFrame: any = null
-  let renderRafId = 0
-
-  function renderLoop() {
-    if (pendingFrame) {
-      ctx.drawImage(pendingFrame, 0, 0, 1920, 1080)
-      pendingFrame.close()
-      pendingFrame = null
-    }
-    renderRafId = requestAnimationFrame(renderLoop)
-  }
-  renderRafId = requestAnimationFrame(renderLoop)
 
   decoder = new VideoDecoder({
     output(frame) {
-      if (pendingFrame) {
-        pendingFrame.close()
-      }
-      pendingFrame = frame
+      ctx.drawImage(frame, 0, 0, 1920, 1080)
+      frame.close()
     },
     error(e) {
       console.error('WebCodecs VideoDecoder error:', e)
@@ -346,25 +330,9 @@ onMounted(async () => {
       }
     }
   }
-
-  ;(window as any)._cleanupRender = () => {
-    if (renderRafId) {
-      cancelAnimationFrame(renderRafId)
-      renderRafId = 0
-    }
-    if (pendingFrame) {
-      try {
-        pendingFrame.close()
-      } catch {}
-      pendingFrame = null
-    }
-  }
 })
 
 onUnmounted(() => {
-  if (typeof (window as any)._cleanupRender === 'function') {
-    ;(window as any)._cleanupRender()
-  }
   if (mouseRafId) {
     cancelAnimationFrame(mouseRafId)
     mouseRafId = 0
@@ -410,12 +378,8 @@ onUnmounted(() => {
   max-height: 100vh;
   aspect-ratio: 16 / 9;
   object-fit: contain;
-  cursor: crosshair;
+  cursor: default;
   display: block;
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .overlay {
