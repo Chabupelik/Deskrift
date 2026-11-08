@@ -50,6 +50,19 @@
       </div>
     </div>
 
+    <div v-else-if="!stream.connected" class="overlay">
+      <div class="overlay-card">
+        <div class="overlay-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 14 14" />
+          </svg>
+        </div>
+        <h2>Подключение</h2>
+        <p>Установка связи с сервером...</p>
+      </div>
+    </div>
+
     <div v-else-if="!stream.pcOnline" class="overlay">
       <div class="overlay-card">
         <div class="overlay-icon">
