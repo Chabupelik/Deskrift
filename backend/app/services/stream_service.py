@@ -32,14 +32,6 @@ class StreamService:
         else:
             await self.manager.send_text_to_pc(json.dumps({"type": "stop_stream"}))
 
-        if self.manager.browser_online:
-            await self.manager.send_text_to_pc(json.dumps({"type": "start_stream"}))
-            await self.manager.send_text_to_browser(
-                json.dumps({"type": "pc_status", "online": True})
-            )
-        else:
-            await self.manager.send_text_to_pc(json.dumps({"type": "stop_stream"}))
-
         try:
             while True:
                 data = await websocket.receive_bytes()
@@ -61,16 +53,6 @@ class StreamService:
         session: WSBrowserSession,
     ) -> None:
         await self.manager.connect_browser(websocket)
-        if self.manager.pc_online:
-            await self.manager.send_text_to_browser(
-                json.dumps({"type": "pc_status", "online": True})
-            )
-            await self.manager.send_text_to_pc(json.dumps({"type": "start_stream"}))
-        else:
-            await self.manager.send_text_to_browser(
-                json.dumps({"type": "pc_status", "online": False})
-            )
-
         if self.manager.pc_online:
             await self.manager.send_text_to_browser(
                 json.dumps({"type": "pc_status", "online": True})
