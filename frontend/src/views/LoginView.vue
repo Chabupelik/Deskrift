@@ -1,69 +1,76 @@
 <template>
-  <div class="login-wrapper">
+  <div class="login-page">
     <div class="login-card">
-      <div class="brand">
-        <div class="logo-mark">⚡</div>
-        <h1 class="logo-title">Deskrift</h1>
-        <p class="logo-subtitle">Удаленный рабочий стол с низкой задержкой</p>
-      </div>
-
-      <div v-if="state === 'idle'" class="action-block">
-        <button class="btn-primary" @click="startLogin">
-          <span>Войти через Telegram</span>
-        </button>
-      </div>
-
-      <div v-else-if="state === 'loading'" class="status-block">
-        <div class="spinner" />
-        <p class="status-text">Инициализация запроса...</p>
-      </div>
-
-      <div v-else-if="state === 'waiting'" class="status-block">
-        <div class="pulse-ring" />
-        <h3 class="status-title">Подтвердите вход</h3>
-        <p class="status-desc">
-          В Telegram отправлен запрос с кнопками подтверждения. Нажмите «Разрешить» в боте.
-        </p>
-        <div class="timer-badge">
-          Осталось: {{ countdown }} сек
+      <div class="header">
+        <div class="brand-row">
+          <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="20" height="14" x="2" y="3" rx="2" />
+            <line x1="8" x2="16" y1="21" y2="21" />
+            <line x1="12" x2="12" y1="17" y2="21" />
+          </svg>
+          <span class="brand-name">Deskrift</span>
         </div>
-        <button class="btn-secondary" @click="cancelLogin">
-          Отмена
-        </button>
+        <p class="brand-tagline">Удаленный доступ сверхнизкой задержки</p>
       </div>
 
-      <div v-else-if="state === 'rejected'" class="status-block">
-        <div class="status-icon icon-error">✕</div>
-        <h3 class="status-title">Вход отклонен</h3>
-        <p class="status-desc">Запрос был отклонен в Telegram.</p>
-        <button class="btn-primary" @click="startLogin">
-          Попробовать снова
-        </button>
+      <div class="content">
+        <div v-if="state === 'idle'" class="state-pane">
+          <button class="btn-primary" @click="startLogin">
+            <svg class="tg-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+            </svg>
+            <span>Войти через Telegram</span>
+          </button>
+        </div>
+
+        <div v-else-if="state === 'loading'" class="state-pane">
+          <div class="loader-ring" />
+          <p class="status-msg">Инициализация сессии...</p>
+        </div>
+
+        <div v-else-if="state === 'waiting'" class="state-pane">
+          <div class="loader-ring" />
+          <div class="waiting-details">
+            <div class="status-title">Подтвердите вход</div>
+            <p class="status-sub">Откройте Telegram-бота и нажмите «Разрешить»</p>
+          </div>
+          <div class="meta-row">
+            <span class="mono-badge">{{ formattedTime }}</span>
+          </div>
+          <button class="btn-ghost" @click="cancelLogin">Отменить</button>
+        </div>
+
+        <div v-else-if="state === 'rejected'" class="state-pane">
+          <div class="notice notice-danger">
+            <span>Вход отклонен в Telegram</span>
+          </div>
+          <button class="btn-secondary" @click="startLogin">Попробовать снова</button>
+        </div>
+
+        <div v-else-if="state === 'expired'" class="state-pane">
+          <div class="notice notice-warning">
+            <span>Время ожидания подтверждения истекло</span>
+          </div>
+          <button class="btn-secondary" @click="startLogin">Попробовать снова</button>
+        </div>
+
+        <div v-else-if="state === 'error'" class="state-pane">
+          <div class="notice notice-danger">
+            <span>{{ errorMessage }}</span>
+          </div>
+          <button class="btn-secondary" @click="startLogin">Попробовать снова</button>
+        </div>
       </div>
 
-      <div v-else-if="state === 'expired'" class="status-block">
-        <div class="status-icon icon-warning">⏱</div>
-        <h3 class="status-title">Время истекло</h3>
-        <p class="status-desc">Срок действия запроса на вход истек.</p>
-        <button class="btn-primary" @click="startLogin">
-          Попробовать снова
-        </button>
-      </div>
-
-      <div v-else-if="state === 'error'" class="status-block">
-        <div class="status-icon icon-error">!</div>
-        <h3 class="status-title">Ошибка входа</h3>
-        <p class="status-desc">{{ errorMessage }}</p>
-        <button class="btn-primary" @click="startLogin">
-          Попробовать снова
-        </button>
+      <div class="footer">
+        <span class="footer-meta">WebCodecs • NVENC 60 FPS • Direct Relay</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '../api/client'
 import { useAuthStore } from '../stores/auth'
@@ -79,6 +86,12 @@ const errorMessage = ref('')
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+const formattedTime = computed(() => {
+  const mins = Math.floor(countdown.value / 60)
+  const secs = countdown.value % 60
+  return `0${mins}:${secs < 10 ? '0' : ''}${secs}`
+})
 
 function cleanupTimers() {
   if (pollTimer) {
@@ -127,16 +140,16 @@ async function startLogin() {
       } catch (err: any) {
         cleanupTimers()
         state.value = 'error'
-        errorMessage.value = err.response?.data?.message || 'Ошибка проверки статуса'
+        errorMessage.value = err.response?.data?.message || 'Сбой проверки статуса'
       }
     }, 1500)
   } catch (err: any) {
     state.value = 'error'
     const status = err.response?.status
     if (status === 409) {
-      errorMessage.value = 'Запрос уже ожидает подтверждения в Telegram. Откройте бота.'
+      errorMessage.value = 'Запрос уже ожидает подтверждения в Telegram'
     } else if (status === 429) {
-      errorMessage.value = err.response?.data?.message || 'Слишком много попыток. Подождите перед повторной попыткой.'
+      errorMessage.value = err.response?.data?.message || 'Слишком много попыток. Подождите.'
     } else {
       errorMessage.value = err.response?.data?.message || 'Не удалось отправить запрос на вход.'
     }
@@ -160,182 +173,217 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.login-wrapper {
+.login-page {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: radial-gradient(circle at 50% 20%, #1a1a24 0%, #0a0a0f 70%);
-  padding: 1.5rem;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #09090b;
+  padding: 1rem;
 }
 
 .login-card {
   width: 100%;
-  max-width: 420px;
-  background: rgba(22, 22, 30, 0.75);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 2.5rem 2rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-  text-align: center;
+  max-width: 360px;
+  background: #0f0f12;
+  border: 1px solid #1f1f24;
+  border-radius: 12px;
+  padding: 2rem 1.75rem 1.5rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
-.brand {
-  margin-bottom: 2rem;
+.header {
+  margin-bottom: 1.75rem;
 }
 
-.logo-mark {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-  filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.6));
-}
-
-.logo-title {
-  font-size: 1.85rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #fff;
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   margin-bottom: 0.35rem;
 }
 
-.logo-subtitle {
-  font-size: 0.9rem;
-  color: #8e8ea0;
+.brand-icon {
+  color: #f4f4f5;
 }
 
-.action-block {
+.brand-name {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #f4f4f5;
+}
+
+.brand-tagline {
+  font-size: 0.8125rem;
+  color: #71717a;
+  line-height: 1.35;
+}
+
+.content {
+  min-height: 120px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+}
+
+.state-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 1rem;
+  width: 100%;
 }
 
 .btn-primary {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   width: 100%;
-  padding: 0.85rem 1.25rem;
-  border-radius: 10px;
-  background: #3b82f6;
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border: none;
+  height: 40px;
+  padding: 0 1rem;
+  background: #f4f4f5;
+  color: #09090b;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+  transition: background-color 0.15s ease, transform 0.05s ease;
 }
 
 .btn-primary:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45);
+  background: #e4e4e7;
+}
+
+.btn-primary:active {
+  transform: scale(0.99);
 }
 
 .btn-secondary {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 0.75rem 1.25rem;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #c4c4d0;
-  font-size: 0.9rem;
+  height: 38px;
+  background: #18181b;
+  color: #f4f4f5;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  font-size: 0.875rem;
   font-weight: 500;
-  border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-top: 1rem;
+  transition: background-color 0.15s ease;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: #27272a;
 }
 
-.status-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
+.btn-ghost {
+  background: transparent;
+  border: none;
+  color: #71717a;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: color 0.15s ease;
 }
 
-.status-title {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #fff;
+.btn-ghost:hover {
+  color: #d4d4d8;
 }
 
-.status-desc {
-  font-size: 0.88rem;
-  color: #9ca3af;
-  line-height: 1.4;
+.tg-icon {
+  flex-shrink: 0;
 }
 
-.timer-badge {
-  display: inline-block;
-  padding: 0.35rem 0.85rem;
-  border-radius: 9999px;
-  background: rgba(59, 130, 246, 0.15);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #60a5fa;
-  font-size: 0.82rem;
-  font-weight: 600;
-  margin-top: 0.25rem;
-}
-
-.status-icon {
-  width: 48px;
-  height: 48px;
+.loader-ring {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #27272a;
+  border-top-color: #f4f4f5;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.4rem;
-  font-weight: bold;
+  animation: rotate 0.75s linear infinite;
 }
 
-.icon-error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.icon-warning {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 0.5rem;
-}
-
-@keyframes spin {
+@keyframes rotate {
   to { transform: rotate(360deg); }
 }
 
-.pulse-ring {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: #3b82f6;
-  animation: pulse 1.8s infinite ease-in-out;
-  margin-bottom: 0.5rem;
+.status-msg {
+  font-size: 0.8125rem;
+  color: #a1a1aa;
 }
 
-@keyframes pulse {
-  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 16px rgba(59, 130, 246, 0); }
-  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+.waiting-details {
+  text-align: center;
+}
+
+.status-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #f4f4f5;
+  margin-bottom: 0.25rem;
+}
+
+.status-sub {
+  font-size: 0.8125rem;
+  color: #71717a;
+  line-height: 1.4;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mono-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #a1a1aa;
+  background: #18181b;
+  border: 1px solid #27272a;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.notice {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.notice-danger {
+  background: #191012;
+  border: 1px solid #381a1f;
+  color: #f87171;
+}
+
+.notice-warning {
+  background: #18140c;
+  border: 1px solid #382d16;
+  color: #fbbf24;
+}
+
+.footer {
+  margin-top: 1.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid #1a1a1f;
+  text-align: center;
+}
+
+.footer-meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
+  color: #52525b;
+  letter-spacing: 0.02em;
 }
 </style>
