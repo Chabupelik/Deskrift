@@ -1,13 +1,18 @@
 <template>
   <div class="stream-container" ref="containerRef" tabindex="0" @keydown="onKeyDown" @keyup="onKeyUp" @paste="onPaste">
-    <canvas
-      ref="canvasRef"
-      class="stream-canvas"
-      @mousemove="onMouseMove"
-      @mousedown="onMouseDown"
-      @mouseup="onMouseUp"
-      @contextmenu.prevent
-    />
+    <div class="canvas-wrapper">
+      <canvas
+        ref="canvasRef"
+        class="stream-canvas"
+        width="1920"
+        height="1080"
+        @mousemove="onMouseMove"
+        @mousedown="onMouseDown"
+        @mouseup="onMouseUp"
+        @wheel.prevent="onWheel"
+        @contextmenu.prevent
+      />
+    </div>
 
     <div v-if="!isSupported" class="overlay">
       <div class="overlay-card">
@@ -108,23 +113,18 @@ const isDisconnected = ref(false)
 let ws: WebSocket | null = null
 let decoder: any = null
 
-function updateCanvasSize() {
-  const canvas = canvasRef.value
-  if (!canvas) return
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
-}
-
-function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEvent, button?: 'left' | 'right') {
+function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEvent, button?: 'left' | 'right' | 'middle') {
   if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
   const canvas = canvasRef.value
   if (!canvas) return
 
   const rect = canvas.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) return
+
   const xRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
   const yRatio = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
-  const x = Math.round(xRatio * stream.remoteWidth)
-  const y = Math.round(yRatio * stream.remoteHeight)
+  const x = Math.round(xRatio * 1920)
+  const y = Math.round(yRatio * 1080)
 
   const payload: Record<string, any> = { type, x, y }
   if (button) {
@@ -140,14 +140,24 @@ function onMouseMove(e: MouseEvent) {
 function onMouseDown(e: MouseEvent) {
   e.preventDefault()
   containerRef.value?.focus()
-  const button = e.button === 2 ? 'right' : 'left'
+  let button: 'left' | 'right' | 'middle' = 'left'
+  if (e.button === 2) button = 'right'
+  else if (e.button === 1) button = 'middle'
   sendMouseEvent('mousedown', e, button)
 }
 
 function onMouseUp(e: MouseEvent) {
   e.preventDefault()
-  const button = e.button === 2 ? 'right' : 'left'
+  let button: 'left' | 'right' | 'middle' = 'left'
+  if (e.button === 2) button = 'right'
+  else if (e.button === 1) button = 'middle'
   sendMouseEvent('mouseup', e, button)
+}
+
+function onWheel(e: WheelEvent) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
+  const delta = e.deltaY < 0 ? 120 : -120
+  ws.send(JSON.stringify({ type: 'wheel', delta }))
 }
 
 function onKeyDown(e: KeyboardEvent) {
@@ -190,18 +200,12 @@ onMounted(() => {
 
   const canvas = canvasRef.value!
   const ctx = canvas.getContext('2d', { alpha: false })!
-  updateCanvasSize()
-  window.addEventListener('resize', updateCanvasSize)
 
   let hasKeyframe = false
 
   decoder = new VideoDecoder({
     output(frame) {
-      if (frame.displayWidth && frame.displayHeight) {
-        stream.remoteWidth = frame.displayWidth
-        stream.remoteHeight = frame.displayHeight
-      }
-      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
+      ctx.drawImage(frame, 0, 0, 1920, 1080)
       frame.close()
     },
     error(e) {
@@ -279,7 +283,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', updateCanvasSize)
   if (ws) {
     ws.close()
     ws = null
@@ -301,15 +304,28 @@ onUnmounted(() => {
   height: 100vh;
   overflow: hidden;
   background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   outline: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+.canvas-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+}
+
 .stream-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
+  max-width: 100vw;
+  max-height: 100vh;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
   cursor: crosshair;
+  display: block;
 }
 
 .overlay {

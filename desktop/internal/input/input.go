@@ -11,8 +11,9 @@ var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 
-	procSendInput        = user32.NewProc("SendInput")
 	procSetCursorPos     = user32.NewProc("SetCursorPos")
+	procMouseEvent       = user32.NewProc("mouse_event")
+	procKeybdEvent       = user32.NewProc("keybd_event")
 	procOpenClipboard    = user32.NewProc("OpenClipboard")
 	procCloseClipboard   = user32.NewProc("CloseClipboard")
 	procEmptyClipboard   = user32.NewProc("EmptyClipboard")
@@ -24,10 +25,6 @@ var (
 )
 
 const (
-	inputMouse    = 0
-	inputKeyboard = 1
-
-	mouseeventfMove       = 0x0001
 	mouseeventfLeftdown   = 0x0002
 	mouseeventfLeftup     = 0x0004
 	mouseeventfRightdown  = 0x0008
@@ -41,32 +38,6 @@ const (
 	vkControl = 0x11
 	vkV       = 0x56
 )
-
-type mouseInput struct {
-	dx        int32
-	dy        int32
-	mouseData uint32
-	dwFlags   uint32
-	time      uint32
-	_         uint32
-	extraInfo uintptr
-}
-
-type keybdInput struct {
-	wVk       uint16
-	wScan     uint16
-	dwFlags   uint32
-	time      uint32
-	_         uint32
-	extraInfo uintptr
-	_         [8]byte
-}
-
-type winInput struct {
-	inputType uint32
-	_         uint32
-	data      [32]byte
-}
 
 type InputEvent struct {
 	Type   string `json:"type"`
@@ -115,7 +86,7 @@ func (h *Handler) mouseMove(x, y int) {
 }
 
 func (h *Handler) mouseClick(button string, down bool) {
-	var flags uint32
+	var flags uintptr
 	switch button {
 	case "left":
 		if down {
@@ -138,39 +109,19 @@ func (h *Handler) mouseClick(button string, down bool) {
 	default:
 		return
 	}
-
-	mi := mouseInput{dwFlags: flags}
-	var inp winInput
-	inp.inputType = inputMouse
-	*(*mouseInput)(unsafe.Pointer(&inp.data[0])) = mi
-	procSendInput.Call(1, uintptr(unsafe.Pointer(&inp)), unsafe.Sizeof(inp))
+	procMouseEvent.Call(flags, 0, 0, 0, 0)
 }
 
 func (h *Handler) mouseWheel(delta int) {
-	mi := mouseInput{
-		dwFlags:   mouseeventfWheel,
-		mouseData: uint32(int32(delta)),
-	}
-	var inp winInput
-	inp.inputType = inputMouse
-	*(*mouseInput)(unsafe.Pointer(&inp.data[0])) = mi
-	procSendInput.Call(1, uintptr(unsafe.Pointer(&inp)), unsafe.Sizeof(inp))
+	procMouseEvent.Call(mouseeventfWheel, 0, 0, uintptr(int32(delta)), 0)
 }
 
 func (h *Handler) keyEvent(vkCode int, down bool) {
-	var flags uint32
+	var flags uintptr
 	if !down {
 		flags = keyeventfKeyup
 	}
-
-	ki := keybdInput{
-		wVk:     uint16(vkCode),
-		dwFlags: flags,
-	}
-	var inp winInput
-	inp.inputType = inputKeyboard
-	*(*keybdInput)(unsafe.Pointer(&inp.data[0])) = ki
-	procSendInput.Call(1, uintptr(unsafe.Pointer(&inp)), unsafe.Sizeof(inp))
+	procKeybdEvent.Call(uintptr(vkCode), 0, flags, 0)
 }
 
 func (h *Handler) pasteText(text string) {

@@ -67,7 +67,7 @@ class StreamService:
             while True:
                 data = await websocket.receive_text()
                 if self.manager.pc_online:
-                    await self.manager.send_to_pc(data.encode())
+                    await self.manager.send_text_to_pc(data)
         except WebSocketDisconnect as exc:
             logger.info(
                 "Browser websocket disconnected: code=%s, user=%s",
