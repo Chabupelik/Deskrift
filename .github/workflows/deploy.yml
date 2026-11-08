@@ -70,6 +70,8 @@ jobs:
             mkdir -p frontend/dist
             docker compose up -d --build
             docker image prune -f
+            mkdir -p /var/www/deskrift
+            ln -sfn ~/Deskrift/frontend/dist /var/www/deskrift/frontend || true
 
       - name: Copy built dist to VPS
         uses: appleboy/scp-action@v0.1.7
