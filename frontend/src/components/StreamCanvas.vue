@@ -22,7 +22,10 @@
         <p>Для ультранизкой задержки требуется WebCodecs API (VideoDecoder).</p>
         <div class="hint-block">
           <div>• <b>Chrome / Edge / Brave:</b> поддерживается из коробки</div>
-          <div>• <b>Firefox:</b> в <code>about:config</code> включите <code>dom.media.webcodecs.enabled</code></div>
+          <div>• <b>Firefox / LibreWolf:</b> в <code>about:config</code>:</div>
+          <div style="padding-left: 1rem; margin-top: 0.25rem;">1. <code>dom.media.webcodecs.enabled</code> = <code>true</code></div>
+          <div style="padding-left: 1rem;">2. <code>privacy.resistFingerprinting</code> = <code>false</code> (или исключите домен)</div>
+          <div style="padding-left: 1rem; margin-top: 0.25rem; font-style: italic;">После изменения перезапустите браузер</div>
         </div>
         <button class="btn-action" @click="returnToLogin">
           Вернуться назад
@@ -30,21 +33,7 @@
       </div>
     </div>
 
-    <div v-else-if="!stream.pcOnline && stream.connected" class="overlay">
-      <div class="overlay-card">
-        <div class="overlay-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="20" height="14" x="2" y="3" rx="2" />
-            <line x1="8" x2="16" y1="21" y2="21" />
-            <line x1="12" x2="12" y1="17" y2="21" />
-          </svg>
-        </div>
-        <h2>Компьютер не в сети</h2>
-        <p>Десктоп-агент Deskrift ожидает подключения на ПК</p>
-      </div>
-    </div>
-
-    <div v-if="!stream.connected" class="overlay">
+    <div v-else-if="isDisconnected" class="overlay">
       <div class="overlay-card">
         <div class="overlay-icon icon-danger">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -58,6 +47,20 @@
         <button class="btn-action" @click="returnToLogin">
           Вернуться ко входу
         </button>
+      </div>
+    </div>
+
+    <div v-else-if="!stream.pcOnline" class="overlay">
+      <div class="overlay-card">
+        <div class="overlay-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="20" height="14" x="2" y="3" rx="2" />
+            <line x1="8" x2="16" y1="21" y2="21" />
+            <line x1="12" x2="12" y1="17" y2="21" />
+          </svg>
+        </div>
+        <h2>Компьютер не в сети</h2>
+        <p>Десктоп-агент Deskrift ожидает подключения на ПК</p>
       </div>
     </div>
 
@@ -87,6 +90,7 @@ const stream = useStreamStore()
 const containerRef = ref<HTMLDivElement>()
 const canvasRef = ref<HTMLCanvasElement>()
 const isSupported = ref(typeof window !== 'undefined' && 'VideoDecoder' in window)
+const isDisconnected = ref(false)
 
 let ws: WebSocket | null = null
 let decoder: any = null
@@ -154,6 +158,7 @@ function onPaste(e: ClipboardEvent) {
 }
 
 function returnToLogin() {
+  isDisconnected.value = false
   auth.logout()
   stream.reset()
   router.push('/')
@@ -208,6 +213,13 @@ onMounted(() => {
   ws.onclose = () => {
     stream.connected = false
     stream.pcOnline = false
+    isDisconnected.value = true
+  }
+
+  ws.onerror = () => {
+    stream.connected = false
+    stream.pcOnline = false
+    isDisconnected.value = true
   }
 
   ws.onmessage = (event) => {
@@ -247,9 +259,7 @@ onUnmounted(() => {
   if (decoder) {
     try {
       decoder.close()
-    } catch {
-      // Ignored on teardown
-    }
+    } catch {}
     decoder = null
   }
   stream.reset()
