@@ -13,22 +13,33 @@ class ConnectionManager:
         self.browser: WebSocket | None = None
 
     async def connect_pc(self, ws: WebSocket) -> None:
+        if self.pc and self.pc != ws:
+            logger.info("Closing existing PC connection")
+            try:
+                await self.pc.close(code=1000)
+            except Exception as exc:
+                logger.warning("Failed to close previous PC connection: %s", exc)
         await ws.accept()
         self.pc = ws
         logger.info("Desktop agent connected")
 
-    def disconnect_pc(self) -> None:
-        self.pc = None
-        logger.info("Desktop agent disconnected")
+    def disconnect_pc(self, ws: WebSocket | None = None) -> None:
+        if ws is None or self.pc == ws:
+            self.pc = None
+            logger.info("Desktop agent disconnected")
 
     async def connect_browser(self, ws: WebSocket) -> None:
+        if self.browser and self.browser != ws:
+            logger.info("Closing existing browser connection")
+            await self.close_browser()
         await ws.accept()
         self.browser = ws
         logger.info("Browser connected")
 
-    def disconnect_browser(self) -> None:
-        self.browser = None
-        logger.info("Browser disconnected")
+    def disconnect_browser(self, ws: WebSocket | None = None) -> None:
+        if ws is None or self.browser == ws:
+            self.browser = None
+            logger.info("Browser disconnected")
 
     async def close_browser(self) -> None:
         if self.browser:

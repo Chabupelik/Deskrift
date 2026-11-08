@@ -32,7 +32,7 @@ class StreamService:
         except Exception as exc:
             logger.exception("Unexpected error in PC websocket: %s", exc)
         finally:
-            self.manager.disconnect_pc()
+            self.manager.disconnect_pc(websocket)
 
     async def handle_browser_stream(
         self,
@@ -57,7 +57,7 @@ class StreamService:
                 exc,
             )
         finally:
-            self.manager.disconnect_browser()
+            self.manager.disconnect_browser(websocket)
             await self.auth_service.revoke_token(session.token, session.telegram_id)
 
 

@@ -69,7 +69,9 @@ class AuthService:
         await self.redis.set(
             f"blacklist:{token}", "1", ex=self.settings.jwt_expire_minutes * 60
         )
-        await self.redis.delete(f"active_session:{telegram_id}")
+        current_active = await self.redis.get(f"active_session:{telegram_id}")
+        if current_active == token:
+            await self.redis.delete(f"active_session:{telegram_id}")
 
     async def process_webhook(self, update: TelegramUpdate) -> None:
         if not update.callback_query:
