@@ -2,23 +2,24 @@ package encoder
 
 import (
 	"io"
-	"log"
 	"os/exec"
-
-	"github.com/chabupelik/deskrift/internal/config"
+	"sync"
+	"syscall"
 )
 
 var QualityProfiles = map[string][]string{
 	"high": {
 		"-f", "gdigrab", "-framerate", "60", "-i", "desktop",
 		"-c:v", "h264_nvenc", "-preset", "p1", "-tune", "ll",
-		"-b:v", "15M", "-maxrate", "15M", "-bufsize", "5M",
+		"-zerolatency", "1", "-rc", "cbr",
+		"-b:v", "15M", "-maxrate", "15M", "-bufsize", "3M",
 		"-g", "60",
 		"-f", "h264", "pipe:1",
 	},
 	"medium": {
 		"-f", "gdigrab", "-framerate", "30", "-i", "desktop",
 		"-c:v", "h264_nvenc", "-preset", "p1", "-tune", "ll",
+		"-zerolatency", "1", "-rc", "cbr",
 		"-b:v", "6M", "-maxrate", "6M", "-bufsize", "2M",
 		"-g", "30",
 		"-f", "h264", "pipe:1",
@@ -27,6 +28,7 @@ var QualityProfiles = map[string][]string{
 		"-f", "gdigrab", "-framerate", "24", "-i", "desktop",
 		"-vf", "scale=1280:720",
 		"-c:v", "h264_nvenc", "-preset", "p1", "-tune", "ll",
+		"-zerolatency", "1", "-rc", "cbr",
 		"-b:v", "2M", "-maxrate", "2M", "-bufsize", "1M",
 		"-g", "24",
 		"-f", "h264", "pipe:1",
@@ -34,44 +36,71 @@ var QualityProfiles = map[string][]string{
 }
 
 type Encoder struct {
-	cfg    *config.Config
-	cmd    *exec.Cmd
-	Stdout io.ReadCloser
+	mu      sync.Mutex
+	cmd     *exec.Cmd
+	Stdout  io.ReadCloser
+	running bool
 }
 
-func New(cfg *config.Config) *Encoder {
-	return &Encoder{cfg: cfg}
+func New() *Encoder {
+	return &Encoder{}
 }
 
-func (e *Encoder) Start() error {
-	args, ok := QualityProfiles[e.cfg.Quality]
+func (e *Encoder) Start(quality string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.running {
+		return nil
+	}
+
+	args, ok := QualityProfiles[quality]
 	if !ok {
 		args = QualityProfiles["high"]
 	}
 
-	e.cmd = exec.Command("ffmpeg", args...)
-	var err error
-	e.Stdout, err = e.cmd.StdoutPipe()
+	cmd := exec.Command("ffmpeg", args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
 
-	if err := e.cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return err
 	}
-	log.Printf("ffmpeg started (quality: %s)", e.cfg.Quality)
+
+	e.cmd = cmd
+	e.Stdout = stdout
+	e.running = true
 	return nil
 }
 
 func (e *Encoder) Stop() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if !e.running {
+		return
+	}
+
 	if e.cmd != nil && e.cmd.Process != nil {
 		_ = e.cmd.Process.Kill()
+		_ = e.cmd.Wait()
 	}
+
+	if e.Stdout != nil {
+		_ = e.Stdout.Close()
+	}
+
+	e.running = false
+	e.cmd = nil
+	e.Stdout = nil
 }
 
-func (e *Encoder) SetQuality(quality string) error {
-	log.Printf("Switching quality to: %s", quality)
-	e.Stop()
-	e.cfg.Quality = quality
-	return e.Start()
+func (e *Encoder) IsRunning() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.running
 }

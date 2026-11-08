@@ -1,38 +1,45 @@
 package main
 
 import (
-	"log"
+	"flag"
 	"os"
-	"os/signal"
-	"syscall"
 
-	"github.com/chabupelik/deskrift/internal/config"
-	"github.com/chabupelik/deskrift/internal/encoder"
-	"github.com/chabupelik/deskrift/internal/input"
-	"github.com/chabupelik/deskrift/internal/relay"
+	"deskrift/internal/config"
+	"deskrift/internal/encoder"
+	"deskrift/internal/input"
+	"deskrift/internal/relay"
+	"deskrift/internal/ui"
 )
 
 func main() {
+	trayFlag := flag.Bool("tray", false, "Start minimized to system tray")
+	flag.Parse()
+
 	cfg := config.Load()
 
-	log.Printf("Deskrift starting, server: %s", cfg.ServerURL)
-
 	inputHandler := input.New()
-	enc := encoder.New(cfg)
+	enc := encoder.New()
 	client := relay.New(cfg, enc, inputHandler)
 
+	win := ui.NewSettingsWindow(cfg, client)
+	trayApp := ui.NewTrayApp(cfg, client, win)
+
 	go func() {
-		if err := client.Run(); err != nil {
-			log.Fatalf("relay error: %v", err)
-		}
+		_ = client.Run()
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	startMinimized := *trayFlag
+	if !startMinimized {
+		for _, arg := range os.Args[1:] {
+			if arg == "--tray" || arg == "-tray" {
+				startMinimized = true
+				break
+			}
+		}
+	}
 
-	log.Println("Shutting down...")
+	trayApp.Run(startMinimized)
+
 	client.Stop()
 	enc.Stop()
 }
-

@@ -1,0 +1,14 @@
+github.com/energye/systray v1.0.3 h1:XnyjJCeRU5z00bpNOic2fGTKz/7yHZMZjWiGIVXDS+4=
+github.com/energye/systray v1.0.3/go.mod h1:HelKhC3PXwv3ryDxbuQqV+7kAxAYNzE5cfdrerGOZTc=
+github.com/godbus/dbus/v5 v5.1.0 h1:4KLkAxT3aOY8Li4FRJe/KvhoNFFxo0m6fNuFUO8QJUk=
+github.com/godbus/dbus/v5 v5.1.0/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
+github.com/gonutz/check v1.2.0 h1:PVjoa4xwUU0XAH4/6mdg4kJ9BCCTIiwmBxImLJxCkp8=
+github.com/gonutz/check v1.2.0/go.mod h1:J5ndBcNQd4fv3I+Moevk4PXZoyXRamwwclm6dDgAuyA=
+github.com/gonutz/w32/v2 v2.12.1 h1:ZTWg6ZlETDfWK1Qxx+rdWQdQWZwfhiXoyvxzFYdgsUY=
+github.com/gonutz/w32/v2 v2.12.1/go.mod h1:MgtHx0AScDVNKyB+kjyPder4xIi3XAcHS6LDDU2DmdE=
+github.com/gonutz/wui/v2 v2.8.2 h1:8iUQb9cf8qk3njTQWkzcn04wAVFSp2+AtgRnXSryf/s=
+github.com/gonutz/wui/v2 v2.8.2/go.mod h1:bWAurNwDrzyEBZcOpXQ2PAHTquTB4t/9cL9itqhwvvc=
+github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=
+github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
+golang.org/x/sys v0.49.0 h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
+golang.org/x/sys v0.49.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
