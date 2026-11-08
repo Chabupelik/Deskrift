@@ -50,3 +50,4 @@ func CreateDefaultIcon() []byte {
 	icoBuf.Write(pngBytes)
 	return icoBuf.Bytes()
 }
+

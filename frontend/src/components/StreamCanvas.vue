@@ -193,6 +193,8 @@ onMounted(() => {
   updateCanvasSize()
   window.addEventListener('resize', updateCanvasSize)
 
+  let hasKeyframe = false
+
   decoder = new VideoDecoder({
     output(frame) {
       if (frame.displayWidth && frame.displayHeight) {
@@ -208,7 +210,7 @@ onMounted(() => {
   })
 
   decoder.configure({
-    codec: 'avc1.42001f',
+    codec: 'avc1.42002a',
     hardwareAcceleration: 'prefer-hardware',
     optimizeForLatency: true,
   })
@@ -228,12 +230,14 @@ onMounted(() => {
     stream.connected = false
     stream.pcOnline = false
     isDisconnected.value = true
+    hasKeyframe = false
   }
 
   ws.onerror = () => {
     stream.connected = false
     stream.pcOnline = false
     isDisconnected.value = true
+    hasKeyframe = false
   }
 
   ws.onmessage = (event) => {
@@ -251,10 +255,20 @@ onMounted(() => {
 
     if (event.data instanceof ArrayBuffer && decoder && decoder.state === 'configured') {
       try {
+        const u8 = new Uint8Array(event.data)
+        if (u8.length < 2) return
+
+        const isKey = u8[0] === 1
+        if (!hasKeyframe) {
+          if (!isKey) return
+          hasKeyframe = true
+        }
+
+        const chunkData = event.data.slice(1)
         const chunk = new EncodedVideoChunk({
-          type: 'key',
+          type: isKey ? 'key' : 'delta',
           timestamp: performance.now() * 1000,
-          data: event.data,
+          data: chunkData,
         })
         decoder.decode(chunk)
       } catch (err) {

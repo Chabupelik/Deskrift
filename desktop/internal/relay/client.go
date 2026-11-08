@@ -2,8 +2,6 @@ package relay
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/url"
 	"strings"
 	"sync"
@@ -210,7 +208,7 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 
 	go func() {
 		defer c.enc.Stop()
-		buf := make([]byte, chunkSize)
+		reader := encoder.NewFrameReader(c.enc.Stdout)
 
 		for {
 			select {
@@ -219,30 +217,29 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 			default:
 			}
 
-			if c.enc.Stdout == nil {
-				return
-			}
-
-			n, err := c.enc.Stdout.Read(buf)
+			frame, err := reader.NextFrame()
 			if err != nil {
-				if err != io.EOF {
-					fmt.Println(err)
-				}
 				return
 			}
 
-			if n > 0 {
-				c.mu.Lock()
-				activeConn := c.conn
-				c.mu.Unlock()
+			c.mu.Lock()
+			activeConn := c.conn
+			c.mu.Unlock()
 
-				if activeConn == nil {
-					return
-				}
+			if activeConn == nil {
+				return
+			}
 
-				if err := activeConn.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
-					return
-				}
+			payload := make([]byte, 1+len(frame.Data))
+			if frame.IsKey {
+				payload[0] = 1
+			} else {
+				payload[0] = 0
+			}
+			copy(payload[1:], frame.Data)
+
+			if err := activeConn.WriteMessage(websocket.BinaryMessage, payload); err != nil {
+				return
 			}
 		}
 	}()
