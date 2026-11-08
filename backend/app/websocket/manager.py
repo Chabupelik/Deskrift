@@ -56,7 +56,15 @@ class ConnectionManager:
                 await self.browser.send_bytes(data)
             except Exception as exc:
                 logger.warning("Failed to send bytes to browser: %s", exc)
-                self.disconnect_browser()
+                self.disconnect_browser(self.browser)
+
+    async def send_text_to_browser(self, text: str) -> None:
+        if self.browser:
+            try:
+                await self.browser.send_text(text)
+            except Exception as exc:
+                logger.warning("Failed to send text to browser: %s", exc)
+                self.disconnect_browser(self.browser)
 
     async def send_to_pc(self, data: bytes) -> None:
         if self.pc:
@@ -64,11 +72,23 @@ class ConnectionManager:
                 await self.pc.send_bytes(data)
             except Exception as exc:
                 logger.warning("Failed to send bytes to PC: %s", exc)
-                self.disconnect_pc()
+                self.disconnect_pc(self.pc)
+
+    async def send_text_to_pc(self, text: str) -> None:
+        if self.pc:
+            try:
+                await self.pc.send_text(text)
+            except Exception as exc:
+                logger.warning("Failed to send text to PC: %s", exc)
+                self.disconnect_pc(self.pc)
 
     @property
     def pc_online(self) -> bool:
         return self.pc is not None
+
+    @property
+    def browser_online(self) -> bool:
+        return self.browser is not None
 
 
 manager = ConnectionManager()

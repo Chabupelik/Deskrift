@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated
 
@@ -23,6 +24,14 @@ class StreamService:
 
     async def handle_pc_stream(self, websocket: WebSocket) -> None:
         await self.manager.connect_pc(websocket)
+        if self.manager.browser_online:
+            await self.manager.send_text_to_pc(json.dumps({"type": "start_stream"}))
+            await self.manager.send_text_to_browser(
+                json.dumps({"type": "pc_status", "online": True})
+            )
+        else:
+            await self.manager.send_text_to_pc(json.dumps({"type": "stop_stream"}))
+
         try:
             while True:
                 data = await websocket.receive_bytes()
@@ -33,6 +42,10 @@ class StreamService:
             logger.exception("Unexpected error in PC websocket: %s", exc)
         finally:
             self.manager.disconnect_pc(websocket)
+            if self.manager.browser_online:
+                await self.manager.send_text_to_browser(
+                    json.dumps({"type": "pc_status", "online": False})
+                )
 
     async def handle_browser_stream(
         self,
@@ -40,6 +53,16 @@ class StreamService:
         session: WSBrowserSession,
     ) -> None:
         await self.manager.connect_browser(websocket)
+        if self.manager.pc_online:
+            await self.manager.send_text_to_browser(
+                json.dumps({"type": "pc_status", "online": True})
+            )
+            await self.manager.send_text_to_pc(json.dumps({"type": "start_stream"}))
+        else:
+            await self.manager.send_text_to_browser(
+                json.dumps({"type": "pc_status", "online": False})
+            )
+
         try:
             while True:
                 data = await websocket.receive_text()
@@ -59,6 +82,8 @@ class StreamService:
         finally:
             self.manager.disconnect_browser(websocket)
             await self.auth_service.revoke_token(session.token, session.telegram_id)
+            if self.manager.pc_online:
+                await self.manager.send_text_to_pc(json.dumps({"type": "stop_stream"}))
 
 
 def get_stream_service(

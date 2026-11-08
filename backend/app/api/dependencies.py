@@ -180,7 +180,7 @@ RateLimit = Annotated[None, Depends(rate_limiter)]
 
 auth_rate_limiter = RateLimiter(
     max_requests=3,
-    window_seconds=600,
-    detail="Слишком много попыток входа. Допустимо не более 3 запросов за 10 минут.",
+    window_seconds=900,
+    detail="Слишком много попыток входа. Допустимо не более 3 запросов за 15 минут.",
 )
 AuthRateLimit = Annotated[None, Depends(auth_rate_limiter)]
