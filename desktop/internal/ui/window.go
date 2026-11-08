@@ -98,9 +98,9 @@ func (s *SettingsWindow) initUI() {
 	cmbQuality := wui.NewComboBox()
 	cmbQuality.SetBounds(24, 214, 370, 24)
 	cmbQuality.SetItems([]string{
-		"High (60 FPS, 15 Mbps)",
-		"Medium (30 FPS, 6 Mbps)",
-		"Low (24 FPS, 2 Mbps)",
+		"High (60 FPS, 6-8 Mbps)",
+		"Medium (30 FPS, 3-4 Mbps)",
+		"Low (24 FPS, 1.5-2 Mbps)",
 	})
 	switch s.cfg.Quality {
 	case "medium":

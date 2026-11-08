@@ -49,10 +49,16 @@ type InputEvent struct {
 	Text   string `json:"text,omitempty"`
 }
 
-type Handler struct{}
+type Handler struct {
+	lastX int
+	lastY int
+}
 
 func New() *Handler {
-	return &Handler{}
+	return &Handler{
+		lastX: -1,
+		lastY: -1,
+	}
 }
 
 func (h *Handler) Handle(data []byte) {
@@ -82,6 +88,11 @@ func (h *Handler) Handle(data []byte) {
 }
 
 func (h *Handler) mouseMove(x, y int) {
+	if h.lastX == x && h.lastY == y {
+		return
+	}
+	h.lastX = x
+	h.lastY = y
 	procSetCursorPos.Call(uintptr(x), uintptr(y))
 }
 

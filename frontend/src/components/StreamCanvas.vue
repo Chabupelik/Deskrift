@@ -112,6 +112,10 @@ const isDisconnected = ref(false)
 
 let ws: WebSocket | null = null
 let decoder: any = null
+let lastSentX = -1
+let lastSentY = -1
+let mouseRafId = 0
+let pendingMouseMove: { x: number; y: number } | null = null
 
 function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEvent, button?: 'left' | 'right' | 'middle') {
   if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
@@ -125,6 +129,23 @@ function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEve
   const yRatio = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
   const x = Math.round(xRatio * 1920)
   const y = Math.round(yRatio * 1080)
+
+  if (type === 'mousemove') {
+    if (x === lastSentX && y === lastSentY) return
+    pendingMouseMove = { x, y }
+    if (!mouseRafId) {
+      mouseRafId = requestAnimationFrame(() => {
+        mouseRafId = 0
+        if (pendingMouseMove && ws && ws.readyState === WebSocket.OPEN) {
+          lastSentX = pendingMouseMove.x
+          lastSentY = pendingMouseMove.y
+          ws.send(JSON.stringify({ type: 'mousemove', x: lastSentX, y: lastSentY }))
+          pendingMouseMove = null
+        }
+      })
+    }
+    return
+  }
 
   const payload: Record<string, any> = { type, x, y }
   if (button) {
@@ -283,6 +304,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (mouseRafId) {
+    cancelAnimationFrame(mouseRafId)
+    mouseRafId = 0
+  }
   if (ws) {
     ws.close()
     ws = null

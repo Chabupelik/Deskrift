@@ -32,6 +32,32 @@ func (fr *FrameReader) NextFrame() (*Frame, error) {
 			nextIdx := bytes.Index(fr.buf[5:], fr.audSeq)
 			if nextIdx != -1 {
 				frameEnd := nextIdx + 5
+
+				if len(fr.buf) > 300*1024 {
+					lastKeyIdx := -1
+					searchStart := frameEnd
+					for searchStart+5 < len(fr.buf) {
+						idx := bytes.Index(fr.buf[searchStart:], fr.audSeq)
+						if idx == -1 {
+							break
+						}
+						audPos := searchStart + idx
+						searchStart = audPos + 5
+						nextAud := bytes.Index(fr.buf[searchStart:], fr.audSeq)
+						end := len(fr.buf)
+						if nextAud != -1 {
+							end = searchStart + nextAud
+						}
+						if hasKeyframeNAL(fr.buf[audPos:end]) {
+							lastKeyIdx = audPos
+						}
+					}
+					if lastKeyIdx != -1 {
+						fr.buf = fr.buf[lastKeyIdx:]
+						continue
+					}
+				}
+
 				frameBytes := make([]byte, frameEnd)
 				copy(frameBytes, fr.buf[:frameEnd])
 
@@ -81,4 +107,3 @@ func hasKeyframeNAL(data []byte) bool {
 	}
 	return false
 }
-
