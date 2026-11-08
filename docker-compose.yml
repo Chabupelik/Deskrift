@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deskrift_backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Europe/Moscow
+    ports:
+      - "127.0.0.1:5060:8000"
+    networks:
+      - common_net
+
+networks:
+  common_net:
+    external: true
