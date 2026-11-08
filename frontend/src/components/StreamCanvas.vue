@@ -9,7 +9,28 @@
       @contextmenu.prevent
     />
 
-    <div v-if="!stream.pcOnline && stream.connected" class="overlay">
+    <div v-if="!isSupported" class="overlay">
+      <div class="overlay-card">
+        <div class="overlay-icon icon-danger">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+        </div>
+        <h2>WebCodecs не поддерживается</h2>
+        <p>Для ультранизкой задержки требуется WebCodecs API (VideoDecoder).</p>
+        <div class="hint-block">
+          <div>• <b>Chrome / Edge / Brave:</b> поддерживается из коробки</div>
+          <div>• <b>Firefox:</b> в <code>about:config</code> включите <code>dom.media.webcodecs.enabled</code></div>
+        </div>
+        <button class="btn-action" @click="returnToLogin">
+          Вернуться назад
+        </button>
+      </div>
+    </div>
+
+    <div v-else-if="!stream.pcOnline && stream.connected" class="overlay">
       <div class="overlay-card">
         <div class="overlay-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -65,9 +86,10 @@ const stream = useStreamStore()
 
 const containerRef = ref<HTMLDivElement>()
 const canvasRef = ref<HTMLCanvasElement>()
+const isSupported = ref(typeof window !== 'undefined' && 'VideoDecoder' in window)
 
 let ws: WebSocket | null = null
-let decoder: VideoDecoder | null = null
+let decoder: any = null
 
 function updateCanvasSize() {
   const canvas = canvasRef.value
@@ -140,6 +162,10 @@ function returnToLogin() {
 onMounted(() => {
   if (!auth.token) {
     router.push('/')
+    return
+  }
+
+  if (!isSupported.value) {
     return
   }
 
@@ -303,6 +329,28 @@ onUnmounted(() => {
   font-size: 0.85rem;
   margin-bottom: 1.5rem;
   line-height: 1.4;
+}
+
+.hint-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background-color: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  color: #a1a1aa;
+  text-align: left;
+  margin-bottom: 1.25rem;
+  line-height: 1.4;
+}
+
+.hint-block code {
+  color: #fafafa;
+  background: #27272a;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
 }
 
 .btn-action {
