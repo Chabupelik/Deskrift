@@ -144,20 +144,24 @@
    cp .env.example .env
    ```
 
-   Заполните основные параметры:
+   Заполните параметры в `.env`:
    ```env
-   # Секретный токен для подключения ПК
-   PC_SECRET=your_generated_random_secret_token
+   # Telegram-бот для подтверждения входа (Push 2FA)
+   TELEGRAM_BOT_TOKEN=your_bot_token_here
+   TELEGRAM_WEBHOOK_SECRET=random_webhook_secret_string
+   ALLOWED_TELEGRAM_ID=123456789
 
-   # Telegram-бот для подтверждения входа
-   TELEGRAM_BOT_TOKEN=123456789:ABCDEF...
-   TELEGRAM_OWNER_ID=123456789
+   # Авторизация и безопасность
+   JWT_SECRET=your_random_jwt_secret_string
+   PC_SECRET=your_random_pc_secret_token
 
-   # Redis
-   REDIS_URL=redis://redis:6379/0
+   # Настройки Redis (в Docker Compose сервис называется redis)
+   REDIS_HOST=redis
+   REDIS_PORT=6379
+   REDIS_DB=0
 
-   # Разрешенные домены для CORS
-   ALLOWED_ORIGINS=https://desk.yourdomain.com
+   # Документация FastAPI (/docs)
+   SHOW_DOCS=false
    ```
 
 3. Запустите контейнеры:
