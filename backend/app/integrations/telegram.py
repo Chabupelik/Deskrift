@@ -91,5 +91,67 @@ class TelegramClient:
         except Exception as e:
             logger.error("Telegram answer_callback_query error: %s", e)
 
+    async def send_login_request(
+        self,
+        chat_id: int,
+        client_ip: str,
+        login_id: str,
+    ) -> int | None:
+        text = (
+            "<b>🔔 Попытка входа в Deskrift</b>\n\n"
+            f"<b>IP адрес:</b> <code>{client_ip}</code>\n\n"
+            "Разрешить доступ к рабочему столу?"
+        )
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "✅ Разрешить",
+                        "callback_data": f"approve:{login_id}",
+                    },
+                    {
+                        "text": "❌ Отклонить",
+                        "callback_data": f"reject:{login_id}",
+                    },
+                ]
+            ]
+        }
+        return await self.send_message(chat_id, text, reply_markup)
+
+    async def notify_login_approved(
+        self,
+        chat_id: int,
+        message_id: int,
+        telegram_id: int,
+    ) -> None:
+        text = "<b>✅ Вход разрешен</b>"
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "🛑 Завершить сессию",
+                        "callback_data": f"revoke:{telegram_id}",
+                    }
+                ]
+            ]
+        }
+        await self.edit_message_text(chat_id, message_id, text, reply_markup)
+
+    async def notify_login_rejected(
+        self,
+        chat_id: int,
+        message_id: int,
+    ) -> None:
+        text = "<b>❌ Вход отклонен</b>"
+        await self.edit_message_text(chat_id, message_id, text, {"inline_keyboard": []})
+
+    async def notify_session_revoked(
+        self,
+        chat_id: int,
+        message_id: int,
+    ) -> None:
+        text = "<b>🛑 Сессия завершена</b>"
+        await self.edit_message_text(chat_id, message_id, text, {"inline_keyboard": []})
+
 
 telegram_client = TelegramClient()

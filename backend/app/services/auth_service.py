@@ -29,29 +29,10 @@ class AuthService:
         expires_in = 120
         await self.redis.set(f"login_request:{login_id}", "pending", ex=expires_in)
 
-        text = (
-            "<b>🔔 Попытка входа в Deskrift</b>\n\n"
-            f"<b>IP адрес:</b> <code>{client_ip}</code>\n\n"
-            "Разрешить доступ к рабочему столу?"
-        )
-        reply_markup = {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "✅ Разрешить",
-                        "callback_data": f"approve:{login_id}",
-                    },
-                    {
-                        "text": "❌ Отклонить",
-                        "callback_data": f"reject:{login_id}",
-                    },
-                ]
-            ]
-        }
-        await telegram_client.send_message(
+        await telegram_client.send_login_request(
             chat_id=self.settings.allowed_telegram_id,
-            text=text,
-            reply_markup=reply_markup,
+            client_ip=client_ip,
+            login_id=login_id,
         )
 
         return LoginInitResponse(login_id=login_id, expires_in=expires_in)
@@ -111,20 +92,10 @@ class AuthService:
                     text="Вход разрешен",
                 )
                 if message_id:
-                    await telegram_client.edit_message_text(
+                    await telegram_client.notify_login_approved(
                         chat_id=chat_id,
                         message_id=message_id,
-                        text="<b>✅ Вход разрешен</b>",
-                        reply_markup={
-                            "inline_keyboard": [
-                                [
-                                    {
-                                        "text": "🛑 Завершить сессию",
-                                        "callback_data": f"revoke:{self.settings.allowed_telegram_id}",
-                                    }
-                                ]
-                            ]
-                        },
+                        telegram_id=self.settings.allowed_telegram_id,
                     )
             else:
                 await telegram_client.answer_callback_query(
@@ -140,11 +111,9 @@ class AuthService:
                 text="Вход отклонен",
             )
             if message_id:
-                await telegram_client.edit_message_text(
+                await telegram_client.notify_login_rejected(
                     chat_id=chat_id,
                     message_id=message_id,
-                    text="<b>❌ Вход отклонен</b>",
-                    reply_markup={"inline_keyboard": []},
                 )
 
         elif cq.data.startswith("revoke:"):
@@ -156,11 +125,9 @@ class AuthService:
                 text="Сессия завершена",
             )
             if message_id:
-                await telegram_client.edit_message_text(
+                await telegram_client.notify_session_revoked(
                     chat_id=chat_id,
                     message_id=message_id,
-                    text="<b>🛑 Сессия завершена</b>",
-                    reply_markup={"inline_keyboard": []},
                 )
 
 
