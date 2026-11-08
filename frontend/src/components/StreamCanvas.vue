@@ -138,7 +138,7 @@ function onMouseUp(e: MouseEvent) {
 }
 
 function onKeyDown(e: KeyboardEvent) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
   if (e.key === 'Tab' || e.key === 'Alt' || e.key.startsWith('F')) {
     e.preventDefault()
   }
@@ -146,13 +146,14 @@ function onKeyDown(e: KeyboardEvent) {
 }
 
 function onKeyUp(e: KeyboardEvent) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
   ws.send(JSON.stringify({ type: 'keyup', key: e.keyCode }))
 }
 
 function onPaste(e: ClipboardEvent) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
   const text = e.clipboardData?.getData('text')
-  if (text && ws && ws.readyState === WebSocket.OPEN) {
+  if (text) {
     ws.send(JSON.stringify({ type: 'clipboard', text }))
   }
 }

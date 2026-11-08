@@ -23,9 +23,10 @@ async def request_login(
 @router.get("/login/{login_id}", response_model=LoginCheckResponse)
 async def check_login(
     login_id: str,
+    client_ip: ClientIP,
     auth_service: AuthSrv,
 ) -> LoginCheckResponse:
-    return await auth_service.check_login(login_id)
+    return await auth_service.check_login(login_id, client_ip)
 
 
 @router.post("/telegram/webhook", response_model=StatusResponse)

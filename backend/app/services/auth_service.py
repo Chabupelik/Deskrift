@@ -38,6 +38,7 @@ class AuthService:
         login_id = uuid.uuid4().hex
         expires_in = 120
         await self.redis.set(f"login_request:{login_id}", "pending", ex=expires_in)
+        await self.redis.set(f"login_ip:{login_id}", client_ip, ex=expires_in)
         await self.redis.set("pending_login_request", login_id, ex=expires_in)
 
         await telegram_client.send_login_request(
@@ -48,12 +49,19 @@ class AuthService:
 
         return LoginInitResponse(login_id=login_id, expires_in=expires_in)
 
-    async def check_login(self, login_id: str) -> LoginCheckResponse:
+    async def check_login(
+        self, login_id: str, client_ip: str | None = None
+    ) -> LoginCheckResponse:
         status_val = await self.redis.get(f"login_request:{login_id}")
         if status_val is None:
             return LoginCheckResponse(status="expired")
 
         if status_val == "approved":
+            login_ip = await self.redis.get(f"login_ip:{login_id}")
+            ips_to_clear = {ip for ip in (login_ip, client_ip) if ip}
+            for ip in ips_to_clear:
+                await self.redis.delete(f"rate_limit:{ip}:/api/v1/auth/login")
+            await self.redis.delete(f"login_ip:{login_id}")
             await self.redis.delete(f"login_request:{login_id}")
             await self.redis.delete("pending_login_request")
             token = create_jwt(self.settings.allowed_telegram_id)
@@ -69,6 +77,7 @@ class AuthService:
             )
 
         if status_val == "rejected":
+            await self.redis.delete(f"login_ip:{login_id}")
             await self.redis.delete(f"login_request:{login_id}")
             await self.redis.delete("pending_login_request")
             return LoginCheckResponse(status="rejected")
