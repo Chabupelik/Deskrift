@@ -66,6 +66,7 @@ jobs:
             cd ~/Deskrift
             git fetch origin main
             git reset --hard origin/main
+            rm -rf desktop
             rm -rf frontend/dist/*
             mkdir -p frontend/dist
             docker compose up -d --build

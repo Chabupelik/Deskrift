@@ -1,57 +1,52 @@
 <template>
-  <div
-    class="stream-viewport"
-    ref="containerRef"
-    tabindex="0"
-    @keydown="onKeyDown"
-    @keyup="onKeyUp"
-    @paste="onPaste"
-    @mousemove="handleActivity"
-  >
+  <div class="stream-container" ref="containerRef" tabindex="0" @keydown="onKeyDown" @keyup="onKeyUp" @paste="onPaste">
     <canvas
       ref="canvasRef"
-      class="video-canvas"
+      class="stream-canvas"
       @mousemove="onMouseMove"
       @mousedown="onMouseDown"
       @mouseup="onMouseUp"
       @contextmenu.prevent
     />
 
-    <div v-if="!stream.pcOnline && stream.connected" class="status-overlay">
-      <div class="overlay-modal">
-        <svg class="modal-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-          <rect width="20" height="14" x="2" y="3" rx="2" />
-          <line x1="8" x2="16" y1="21" y2="21" />
-          <line x1="12" x2="12" y1="17" y2="21" />
-        </svg>
-        <div class="modal-title">Компьютер не в сети</div>
-        <p class="modal-desc">Десктоп-агент Deskrift ожидает подключения на ПК</p>
+    <div v-if="!stream.pcOnline && stream.connected" class="overlay">
+      <div class="overlay-card">
+        <div class="overlay-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="20" height="14" x="2" y="3" rx="2" />
+            <line x1="8" x2="16" y1="21" y2="21" />
+            <line x1="12" x2="12" y1="17" y2="21" />
+          </svg>
+        </div>
+        <h2>Компьютер не в сети</h2>
+        <p>Десктоп-агент Deskrift ожидает подключения на ПК</p>
       </div>
     </div>
 
-    <div v-if="!stream.connected" class="status-overlay">
-      <div class="overlay-modal">
-        <svg class="modal-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="15" x2="9" y1="9" y2="15" />
-          <line x1="9" x2="15" y1="9" y2="15" />
-        </svg>
-        <div class="modal-title">Сессия завершена</div>
-        <p class="modal-desc">Соединение с сервером закрыто</p>
+    <div v-if="!stream.connected" class="overlay">
+      <div class="overlay-card">
+        <div class="overlay-icon icon-danger">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+          </svg>
+        </div>
+        <h2>Сессия завершена</h2>
+        <p>Соединение с сервером было закрыто</p>
         <button class="btn-action" @click="returnToLogin">
           Вернуться ко входу
         </button>
       </div>
     </div>
 
-    <div class="hud" :class="{ 'hud-dimmed': isIdle }">
-      <div class="hud-indicator" :class="{ active: stream.pcOnline && stream.connected }" />
-      <span class="hud-label">{{ stream.pcOnline ? 'LIVE' : 'STANDBY' }}</span>
-      <span class="hud-res">{{ stream.remoteWidth }}×{{ stream.remoteHeight }}</span>
-      <button class="hud-close" @click="returnToLogin" title="Завершить сессию">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" x2="6" y1="6" y2="18" />
-          <line x1="6" x2="18" y1="6" y2="18" />
+    <div class="toolbar">
+      <span class="status-dot" :class="{ online: stream.pcOnline && stream.connected }" />
+      <span class="status-label">{{ stream.pcOnline ? 'В сети' : 'Ожидание' }}</span>
+      <button class="btn-exit" @click="returnToLogin" title="Завершить сессию">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
     </div>
@@ -70,19 +65,9 @@ const stream = useStreamStore()
 
 const containerRef = ref<HTMLDivElement>()
 const canvasRef = ref<HTMLCanvasElement>()
-const isIdle = ref(false)
 
 let ws: WebSocket | null = null
 let decoder: VideoDecoder | null = null
-let idleTimer: ReturnType<typeof setTimeout> | null = null
-
-function handleActivity() {
-  isIdle.value = false
-  if (idleTimer) clearTimeout(idleTimer)
-  idleTimer = setTimeout(() => {
-    isIdle.value = true
-  }, 2500)
-}
 
 function updateCanvasSize() {
   const canvas = canvasRef.value
@@ -173,7 +158,7 @@ onMounted(() => {
       frame.close()
     },
     error(e) {
-      console.error('VideoDecoder error:', e)
+      console.error('WebCodecs VideoDecoder error:', e)
     },
   })
 
@@ -192,7 +177,6 @@ onMounted(() => {
   ws.onopen = () => {
     stream.connected = true
     containerRef.value?.focus()
-    handleActivity()
   }
 
   ws.onclose = () => {
@@ -208,7 +192,7 @@ onMounted(() => {
           stream.pcOnline = !!msg.online
         }
       } catch (err) {
-        console.error('Parse error:', err)
+        console.error('Failed to parse control message:', err)
       }
       return
     }
@@ -230,7 +214,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateCanvasSize)
-  if (idleTimer) clearTimeout(idleTimer)
   if (ws) {
     ws.close()
     ws = null
@@ -248,74 +231,88 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.stream-viewport {
+.stream-container {
   position: relative;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background: #000;
   outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-.video-canvas {
+.stream-canvas {
   display: block;
   width: 100%;
   height: 100%;
   cursor: crosshair;
 }
 
-.status-overlay {
+.overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(9, 9, 11, 0.92);
-  z-index: 10;
+  background: rgba(9, 9, 11, 0.88);
+  backdrop-filter: blur(10px);
+  z-index: 20;
 }
 
-.overlay-modal {
-  background: #111115;
-  border: 1px solid #1f1f26;
+.overlay-card {
+  background: #121215;
+  border: 1px solid #27272a;
   border-radius: 12px;
-  padding: 2rem 2.25rem;
+  padding: 2.25rem 2rem;
   text-align: center;
   max-width: 360px;
-  width: 90%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
 }
 
-.modal-icon {
-  color: #71717a;
-  margin-bottom: 1rem;
-}
-
-.modal-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f4f4f5;
-  margin-bottom: 0.35rem;
-}
-
-.modal-desc {
-  font-size: 0.8125rem;
-  color: #71717a;
-  line-height: 1.4;
+.overlay-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background-color: #18181b;
+  border: 1px solid #27272a;
+  color: #a1a1aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 1.25rem;
 }
 
+.overlay-icon.icon-danger {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.overlay-card h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fafafa;
+  margin-bottom: 0.35rem;
+}
+
+.overlay-card p {
+  color: #71717a;
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.4;
+}
+
 .btn-action {
-  height: 36px;
-  padding: 0 1.25rem;
-  background: #f4f4f5;
+  background: #fafafa;
   color: #09090b;
-  border: 1px solid #e4e4e7;
-  border-radius: 7px;
-  font-size: 0.8125rem;
+  border: 1px solid #fafafa;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.85rem;
   font-weight: 500;
+  border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
@@ -324,74 +321,54 @@ onUnmounted(() => {
   background: #e4e4e7;
 }
 
-.hud {
+.toolbar {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
+  top: 1rem;
+  right: 1rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(15, 15, 18, 0.85);
+  background: rgba(18, 18, 21, 0.8);
   backdrop-filter: blur(8px);
-  border: 1px solid #1f1f24;
-  border-radius: 6px;
-  padding: 0.3rem 0.6rem;
-  z-index: 20;
-  transition: opacity 0.3s ease;
-  user-select: none;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  z-index: 30;
+  pointer-events: auto;
 }
 
-.hud-dimmed {
-  opacity: 0.15;
-}
-
-.hud-dimmed:hover {
-  opacity: 1;
-}
-
-.hud-indicator {
-  width: 6px;
-  height: 6px;
+.status-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #71717a;
 }
 
-.hud-indicator.active {
+.status-dot.online {
   background: #22c55e;
 }
 
-.hud-label {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #d4d4d8;
-  letter-spacing: 0.05em;
+.status-label {
+  font-size: 0.75rem;
+  color: #a1a1aa;
+  font-weight: 500;
 }
 
-.hud-res {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.6875rem;
-  color: #71717a;
-  border-left: 1px solid #27272a;
-  padding-left: 0.5rem;
-}
-
-.hud-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.btn-exit {
   background: transparent;
   border: none;
   color: #71717a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  padding: 2px;
   margin-left: 0.25rem;
-  border-radius: 3px;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  padding: 0.2rem;
+  border-radius: 4px;
+  transition: color 0.15s ease;
 }
 
-.hud-close:hover {
-  color: #f4f4f5;
-  background: rgba(255, 255, 255, 0.08);
+.btn-exit:hover {
+  color: #fafafa;
 }
 </style>
