@@ -293,22 +293,27 @@ onMounted(async () => {
   const canvas = canvasRef.value!
   const ctx = canvas.getContext('2d', { alpha: false })!
 
-  decoder = new VideoDecoder({
-    output(frame) {
-      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
-      frame.close()
-    },
-    error(e) {
-      console.error('WebCodecs VideoDecoder error:', e)
-    },
-  })
-
   const codec = await getSupportedH264Codec()
-  decoder.configure({
-    codec,
-    hardwareAcceleration: 'prefer-hardware',
-    optimizeForLatency: true,
-  })
+
+  function makeDecoder() {
+    const d = new VideoDecoder({
+      output(frame) {
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
+        frame.close()
+      },
+      error(e) {
+        console.error('WebCodecs VideoDecoder error:', e)
+      },
+    })
+    d.configure({
+      codec,
+      hardwareAcceleration: 'prefer-hardware',
+      optimizeForLatency: true,
+    })
+    return d
+  }
+
+  decoder = makeDecoder()
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const wsUrl = `${protocol}//${window.location.host}/ws/browser?token=${encodeURIComponent(auth.token)}`
@@ -357,11 +362,20 @@ onMounted(async () => {
         if (u8.length < 2) return
 
         const isKey = u8[0] === 1
+
+        // If decoder queue is piling up, flush it and wait for next keyframe
+        if (decoder.decodeQueueSize > 4) {
+          try { decoder.close() } catch {}
+          decoder = makeDecoder()
+          hasKeyframe = false
+        }
+
         if (!hasKeyframe) {
           if (!isKey) return
           hasKeyframe = true
         }
 
+        // Drop non-key frames if still lagging
         if (decoder.decodeQueueSize > 2 && !isKey) {
           return
         }
