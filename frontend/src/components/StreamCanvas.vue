@@ -4,8 +4,8 @@
       <canvas
         ref="canvasRef"
         class="stream-canvas"
-        :width="canvasWidth"
-        :height="canvasHeight"
+        width="1920"
+        height="1080"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
@@ -297,11 +297,11 @@ onMounted(async () => {
 
   decoder = new VideoDecoder({
     output(frame) {
-      if (frame.displayWidth && frame.displayHeight) {
-        if (canvasWidth.value !== frame.displayWidth || canvasHeight.value !== frame.displayHeight) {
-          canvasWidth.value = frame.displayWidth
-          canvasHeight.value = frame.displayHeight
-        }
+      if (frame.displayWidth && frame.displayWidth !== canvas.width) {
+        canvas.width = frame.displayWidth
+      }
+      if (frame.displayHeight && frame.displayHeight !== canvas.height) {
+        canvas.height = frame.displayHeight
       }
       ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
       frame.close()
@@ -435,7 +435,7 @@ onUnmounted(() => {
   max-height: 100vh;
   aspect-ratio: 16 / 9;
   object-fit: contain;
-  cursor: none;
+  cursor: default;
   display: block;
 }
 
