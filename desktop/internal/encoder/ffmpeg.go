@@ -1,99 +1,109 @@
 package encoder
 
 import (
+	"fmt"
 	"io"
 	"os/exec"
 	"sync"
 	"syscall"
 )
 
-var ddaProfiles = map[string][]string{
+type ProfileParams struct {
+	FPS        int
+	Bitrate    string
+	Maxrate    string
+	Bufsize    string
+	GOP        int
+	ScaleWidth int
+}
+
+var qualityProfiles = map[string]ProfileParams{
 	"high": {
-		"-filter_complex", "ddagrab=output_idx=0:framerate=60:draw_mouse=1,format=yuv420p",
-		"-c:v", "h264_nvenc",
-		"-preset", "p1", "-tune", "ull", "-zerolatency", "1", "-delay", "0",
-		"-aud", "1", "-forced-idr", "1",
-		"-profile:v", "baseline",
-		"-bf", "0", "-b_ref_mode", "0",
-		"-b:v", "10M", "-maxrate", "12M", "-bufsize", "1500K",
-		"-spatial-aq", "1", "-aq-strength", "8",
-		"-g", "60",
-		"-fflags", "nobuffer", "-flags", "low_delay", "-flush_packets", "1",
-		"-f", "h264", "pipe:1",
+		FPS:     60,
+		Bitrate: "8M",
+		Maxrate: "10M",
+		Bufsize: "200K",
+		GOP:     60,
 	},
 	"medium": {
-		"-filter_complex", "ddagrab=output_idx=0:framerate=30:draw_mouse=1,format=yuv420p",
-		"-c:v", "h264_nvenc",
-		"-preset", "p1", "-tune", "ull", "-zerolatency", "1", "-delay", "0",
-		"-aud", "1", "-forced-idr", "1",
-		"-profile:v", "baseline",
-		"-bf", "0", "-b_ref_mode", "0",
-		"-b:v", "5M", "-maxrate", "6M", "-bufsize", "800K",
-		"-spatial-aq", "1", "-aq-strength", "8",
-		"-g", "30",
-		"-fflags", "nobuffer", "-flags", "low_delay", "-flush_packets", "1",
-		"-f", "h264", "pipe:1",
+		FPS:     30,
+		Bitrate: "4M",
+		Maxrate: "5M",
+		Bufsize: "150K",
+		GOP:     30,
 	},
 	"low": {
-		"-filter_complex", "ddagrab=output_idx=0:framerate=24:draw_mouse=1,scale=1280:720,format=yuv420p",
-		"-c:v", "h264_nvenc",
-		"-preset", "p1", "-tune", "ull", "-zerolatency", "1", "-delay", "0",
-		"-aud", "1", "-forced-idr", "1",
-		"-profile:v", "baseline",
-		"-bf", "0", "-b_ref_mode", "0",
-		"-b:v", "2M", "-maxrate", "3M", "-bufsize", "400K",
-		"-g", "24",
-		"-fflags", "nobuffer", "-flags", "low_delay", "-flush_packets", "1",
-		"-f", "h264", "pipe:1",
+		FPS:        24,
+		Bitrate:    "2M",
+		Maxrate:    "3M",
+		Bufsize:    "100K",
+		GOP:        24,
+		ScaleWidth: 1280,
 	},
 }
 
-var gdiProfiles = map[string][]string{
-	"high": {
-		"-f", "gdigrab", "-framerate", "60",
-		"-offset_x", "0", "-offset_y", "0", "-video_size", "1920x1080",
-		"-i", "desktop",
+func buildDDAArgs(quality string, outputIdx int) []string {
+	p, ok := qualityProfiles[quality]
+	if !ok {
+		p = qualityProfiles["high"]
+	}
+	filter := fmt.Sprintf("ddagrab=output_idx=%d:framerate=%d:draw_mouse=1", outputIdx, p.FPS)
+	if p.ScaleWidth > 0 {
+		filter += fmt.Sprintf(",scale=%d:-2", p.ScaleWidth)
+	}
+	filter += ",format=yuv420p"
+
+	return []string{
+		"-filter_complex", filter,
 		"-c:v", "h264_nvenc",
 		"-preset", "p1", "-tune", "ull", "-zerolatency", "1", "-delay", "0",
 		"-aud", "1", "-forced-idr", "1",
 		"-profile:v", "baseline",
 		"-bf", "0", "-b_ref_mode", "0",
-		"-b:v", "10M", "-maxrate", "12M", "-bufsize", "1500K",
+		"-b:v", p.Bitrate, "-maxrate", p.Maxrate, "-bufsize", p.Bufsize,
 		"-spatial-aq", "1", "-aq-strength", "8",
-		"-g", "60",
+		"-g", fmt.Sprintf("%d", p.GOP),
 		"-fflags", "nobuffer", "-flags", "low_delay", "-flush_packets", "1",
 		"-f", "h264", "pipe:1",
-	},
-	"medium": {
-		"-f", "gdigrab", "-framerate", "30",
-		"-offset_x", "0", "-offset_y", "0", "-video_size", "1920x1080",
+	}
+}
+
+func buildGDIArgs(quality string, offsetX, offsetY, width, height int) []string {
+	p, ok := qualityProfiles[quality]
+	if !ok {
+		p = qualityProfiles["high"]
+	}
+	if width <= 0 {
+		width = 1920
+	}
+	if height <= 0 {
+		height = 1080
+	}
+	width = width &^ 1
+	height = height &^ 1
+
+	args := []string{
+		"-f", "gdigrab", "-framerate", fmt.Sprintf("%d", p.FPS),
+		"-offset_x", fmt.Sprintf("%d", offsetX), "-offset_y", fmt.Sprintf("%d", offsetY),
+		"-video_size", fmt.Sprintf("%dx%d", width, height),
 		"-i", "desktop",
+	}
+	if p.ScaleWidth > 0 {
+		args = append(args, "-vf", fmt.Sprintf("scale=%d:-2", p.ScaleWidth))
+	}
+	args = append(args,
 		"-c:v", "h264_nvenc",
 		"-preset", "p1", "-tune", "ull", "-zerolatency", "1", "-delay", "0",
 		"-aud", "1", "-forced-idr", "1",
 		"-profile:v", "baseline",
 		"-bf", "0", "-b_ref_mode", "0",
-		"-b:v", "5M", "-maxrate", "6M", "-bufsize", "800K",
+		"-b:v", p.Bitrate, "-maxrate", p.Maxrate, "-bufsize", p.Bufsize,
 		"-spatial-aq", "1", "-aq-strength", "8",
-		"-g", "30",
+		"-g", fmt.Sprintf("%d", p.GOP),
 		"-fflags", "nobuffer", "-flags", "low_delay", "-flush_packets", "1",
 		"-f", "h264", "pipe:1",
-	},
-	"low": {
-		"-f", "gdigrab", "-framerate", "24",
-		"-offset_x", "0", "-offset_y", "0", "-video_size", "1920x1080",
-		"-i", "desktop",
-		"-vf", "scale=1280:720",
-		"-c:v", "h264_nvenc",
-		"-preset", "p1", "-tune", "ull", "-zerolatency", "1", "-delay", "0",
-		"-aud", "1", "-forced-idr", "1",
-		"-profile:v", "baseline",
-		"-bf", "0", "-b_ref_mode", "0",
-		"-b:v", "2M", "-maxrate", "3M", "-bufsize", "400K",
-		"-g", "24",
-		"-fflags", "nobuffer", "-flags", "low_delay", "-flush_packets", "1",
-		"-f", "h264", "pipe:1",
-	},
+	)
+	return args
 }
 
 type Encoder struct {
@@ -124,7 +134,7 @@ func (e *Encoder) spawn(args []string) (*exec.Cmd, io.ReadCloser, error) {
 	return cmd, stdout, nil
 }
 
-func (e *Encoder) Start(quality string) error {
+func (e *Encoder) StartWithMonitor(quality string, outputIdx, offsetX, offsetY, width, height int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -132,11 +142,7 @@ func (e *Encoder) Start(quality string) error {
 		return nil
 	}
 
-	ddaArgs, ok := ddaProfiles[quality]
-	if !ok {
-		ddaArgs = ddaProfiles["high"]
-	}
-
+	ddaArgs := buildDDAArgs(quality, outputIdx)
 	cmd, stdout, err := e.spawn(ddaArgs)
 	if err == nil {
 		hProc, openErr := syscall.OpenProcess(syscall.SYNCHRONIZE, false, uint32(cmd.Process.Pid))
@@ -157,11 +163,7 @@ func (e *Encoder) Start(quality string) error {
 		}
 	}
 
-	gdiArgs, ok := gdiProfiles[quality]
-	if !ok {
-		gdiArgs = gdiProfiles["high"]
-	}
-
+	gdiArgs := buildGDIArgs(quality, offsetX, offsetY, width, height)
 	cmd, stdout, err = e.spawn(gdiArgs)
 	if err != nil {
 		return err
@@ -171,6 +173,10 @@ func (e *Encoder) Start(quality string) error {
 	e.Stdout = stdout
 	e.running = true
 	return nil
+}
+
+func (e *Encoder) Start(quality string) error {
+	return e.StartWithMonitor(quality, 0, 0, 0, 1920, 1080)
 }
 
 func (e *Encoder) Stop() {

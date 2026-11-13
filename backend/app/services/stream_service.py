@@ -34,8 +34,11 @@ class StreamService:
 
         try:
             while True:
-                data = await websocket.receive_bytes()
-                await self.manager.send_to_browser(data)
+                msg = await websocket.receive()
+                if "bytes" in msg and msg["bytes"]:
+                    await self.manager.send_to_browser(msg["bytes"])
+                elif "text" in msg and msg["text"]:
+                    await self.manager.send_text_to_browser(msg["text"])
         except WebSocketDisconnect as exc:
             logger.info("PC websocket disconnected: code=%s", exc.code)
         except Exception as exc:

@@ -4,11 +4,12 @@
       <canvas
         ref="canvasRef"
         class="stream-canvas"
-        width="1920"
-        height="1080"
-        @mousemove="onMouseMove"
-        @mousedown="onMouseDown"
-        @mouseup="onMouseUp"
+        :width="canvasWidth"
+        :height="canvasHeight"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
         @wheel.prevent="onWheel"
         @contextmenu.prevent
       />
@@ -82,15 +83,29 @@
       </div>
     </div>
 
-    <div class="toolbar">
-      <span class="status-dot" :class="{ online: stream.pcOnline && stream.connected }" />
-      <span class="status-label">{{ stream.pcOnline ? 'В сети' : 'Ожидание' }}</span>
-      <button class="btn-exit" @click="returnToLogin" title="Завершить сессию">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
+    <div class="toolbar-trigger" @mouseenter="isToolbarVisible = true">
+      <div
+        class="toolbar"
+        :class="{ visible: isToolbarVisible }"
+        @mouseleave="isToolbarVisible = false"
+      >
+        <span class="status-dot" :class="{ online: stream.pcOnline && stream.connected }" />
+        <span class="status-label">{{ stream.pcOnline ? 'В сети' : 'Ожидание' }}</span>
+        <button v-if="monitorCount > 1" class="btn-monitor" @click="switchMonitor" title="Переключить монитор">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          <span>Монитор {{ currentMonitorNumber }} / {{ monitorCount }}</span>
+        </button>
+        <button class="btn-exit" @click="returnToLogin" title="Завершить сессию">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -109,6 +124,11 @@ const containerRef = ref<HTMLDivElement>()
 const canvasRef = ref<HTMLCanvasElement>()
 const isSupported = ref(typeof window !== 'undefined' && 'VideoDecoder' in window)
 const isDisconnected = ref(false)
+const currentMonitorNumber = ref(1)
+const monitorCount = ref(1)
+const canvasWidth = ref(1920)
+const canvasHeight = ref(1080)
+const isToolbarVisible = ref(false)
 
 let ws: WebSocket | null = null
 let decoder: any = null
@@ -116,6 +136,7 @@ let lastSentX = -1
 let lastSentY = -1
 let mouseRafId = 0
 let pendingMouseMove: { x: number; y: number } | null = null
+let hasKeyframe = false
 
 async function getSupportedH264Codec(): Promise<string> {
   const candidates = [
@@ -151,8 +172,8 @@ function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEve
 
   const xRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
   const yRatio = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
-  const x = Math.round(xRatio * 1920)
-  const y = Math.round(yRatio * 1080)
+  const x = Math.round(xRatio * canvas.width)
+  const y = Math.round(yRatio * canvas.height)
 
   if (type === 'mousemove') {
     if (x === lastSentX && y === lastSentY) return
@@ -160,7 +181,7 @@ function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEve
     if (!mouseRafId) {
       mouseRafId = requestAnimationFrame(() => {
         mouseRafId = 0
-        if (pendingMouseMove && ws && ws.readyState === WebSocket.OPEN) {
+        if (pendingMouseMove && ws && ws.readyState === WebSocket.OPEN && stream.pcOnline) {
           lastSentX = pendingMouseMove.x
           lastSentY = pendingMouseMove.y
           ws.send(JSON.stringify({ type: 'mousemove', x: lastSentX, y: lastSentY }))
@@ -171,6 +192,10 @@ function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEve
     return
   }
 
+  pendingMouseMove = null
+  lastSentX = x
+  lastSentY = y
+
   const payload: Record<string, any> = { type, x, y }
   if (button) {
     payload.button = button
@@ -178,25 +203,41 @@ function sendMouseEvent(type: 'mousemove' | 'mousedown' | 'mouseup', e: MouseEve
   ws.send(JSON.stringify(payload))
 }
 
-function onMouseMove(e: MouseEvent) {
-  sendMouseEvent('mousemove', e)
-}
-
-function onMouseDown(e: MouseEvent) {
+function onPointerDown(e: PointerEvent) {
   e.preventDefault()
   containerRef.value?.focus()
+  try {
+    (e.target as HTMLElement)?.setPointerCapture(e.pointerId)
+  } catch {}
   let button: 'left' | 'right' | 'middle' = 'left'
   if (e.button === 2) button = 'right'
   else if (e.button === 1) button = 'middle'
   sendMouseEvent('mousedown', e, button)
 }
 
-function onMouseUp(e: MouseEvent) {
+function onPointerMove(e: PointerEvent) {
+  sendMouseEvent('mousemove', e)
+}
+
+function onPointerUp(e: PointerEvent) {
   e.preventDefault()
+  try {
+    if ((e.target as HTMLElement)?.hasPointerCapture(e.pointerId)) {
+      (e.target as HTMLElement)?.releasePointerCapture(e.pointerId)
+    }
+  } catch {}
   let button: 'left' | 'right' | 'middle' = 'left'
   if (e.button === 2) button = 'right'
   else if (e.button === 1) button = 'middle'
   sendMouseEvent('mouseup', e, button)
+}
+
+function onWindowBlur() {
+  if (ws && ws.readyState === WebSocket.OPEN && stream.pcOnline) {
+    ws.send(JSON.stringify({ type: 'mouseup', button: 'left' }))
+    ws.send(JSON.stringify({ type: 'mouseup', button: 'right' }))
+    ws.send(JSON.stringify({ type: 'mouseup', button: 'middle' }))
+  }
 }
 
 function onWheel(e: WheelEvent) {
@@ -226,6 +267,12 @@ function onPaste(e: ClipboardEvent) {
   }
 }
 
+function switchMonitor() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
+  hasKeyframe = false
+  ws.send(JSON.stringify({ type: 'switch_monitor' }))
+}
+
 function returnToLogin() {
   isDisconnected.value = false
   auth.logout()
@@ -243,14 +290,20 @@ onMounted(async () => {
     return
   }
 
+  window.addEventListener('blur', onWindowBlur)
+
   const canvas = canvasRef.value!
   const ctx = canvas.getContext('2d', { alpha: false })!
 
-  let hasKeyframe = false
-
   decoder = new VideoDecoder({
     output(frame) {
-      ctx.drawImage(frame, 0, 0, 1920, 1080)
+      if (frame.displayWidth && frame.displayHeight) {
+        if (canvasWidth.value !== frame.displayWidth || canvasHeight.value !== frame.displayHeight) {
+          canvasWidth.value = frame.displayWidth
+          canvasHeight.value = frame.displayHeight
+        }
+      }
+      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
       frame.close()
     },
     error(e) {
@@ -265,15 +318,15 @@ onMounted(async () => {
     optimizeForLatency: true,
   })
 
-  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${wsProtocol}//${location.host}/ws/browser?token=${auth.token}`
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/ws/browser?token=${encodeURIComponent(auth.token)}`
 
   ws = new WebSocket(wsUrl)
   ws.binaryType = 'arraybuffer'
 
   ws.onopen = () => {
     stream.connected = true
-    containerRef.value?.focus()
+    isDisconnected.value = false
   }
 
   ws.onclose = () => {
@@ -296,6 +349,9 @@ onMounted(async () => {
         const msg = JSON.parse(event.data)
         if (msg.type === 'pc_status') {
           stream.pcOnline = !!msg.online
+        } else if (msg.type === 'monitor_info') {
+          if (typeof msg.current === 'number') currentMonitorNumber.value = msg.current
+          if (typeof msg.count === 'number') monitorCount.value = msg.count
         }
       } catch (err) {
         console.error('Failed to parse control message:', err)
@@ -333,6 +389,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('blur', onWindowBlur)
   if (mouseRafId) {
     cancelAnimationFrame(mouseRafId)
     mouseRafId = 0
@@ -378,7 +435,7 @@ onUnmounted(() => {
   max-height: 100vh;
   aspect-ratio: 16 / 9;
   object-fit: contain;
-  cursor: default;
+  cursor: none;
   display: block;
 }
 
@@ -477,20 +534,36 @@ onUnmounted(() => {
   background: #e4e4e7;
 }
 
-.toolbar {
+.toolbar-trigger {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: 0;
+  right: 0;
+  padding: 1rem;
+  z-index: 30;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.toolbar {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(18, 18, 21, 0.8);
+  background: rgba(18, 18, 21, 0.85);
   backdrop-filter: blur(8px);
   border: 1px solid #27272a;
   border-radius: 8px;
   padding: 0.35rem 0.65rem;
-  z-index: 30;
+  opacity: 0.15;
+  transition: opacity 0.2s ease, transform 0.2s ease;
   pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.toolbar:hover,
+.toolbar.visible {
+  opacity: 1;
 }
 
 .status-dot {
@@ -508,6 +581,26 @@ onUnmounted(() => {
   font-size: 0.75rem;
   color: #a1a1aa;
   font-weight: 500;
+}
+
+.btn-monitor {
+  background: rgba(39, 39, 42, 0.6);
+  border: 1px solid #3f3f46;
+  color: #d4d4d8;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.btn-monitor:hover {
+  background: #3f3f46;
+  color: #ffffff;
 }
 
 .btn-exit {

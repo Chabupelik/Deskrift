@@ -12,6 +12,7 @@ import (
 	"deskrift/internal/config"
 	"deskrift/internal/encoder"
 	"deskrift/internal/input"
+	"deskrift/internal/monitor"
 )
 
 const (
@@ -28,19 +29,22 @@ const (
 )
 
 type ControlMessage struct {
-	Type string `json:"type"`
+	Type  string `json:"type"`
+	Index int    `json:"index,omitempty"`
 }
 
 type Client struct {
-	mu             sync.Mutex
-	cfg            *config.Config
-	enc            *encoder.Encoder
-	input          *input.Handler
-	conn           *websocket.Conn
-	done           chan struct{}
-	streamCancel   chan struct{}
-	status         string
-	onStatusChange func(string)
+	mu                sync.Mutex
+	cfg               *config.Config
+	enc               *encoder.Encoder
+	input             *input.Handler
+	monitors          []monitor.Monitor
+	currentMonitorIdx int
+	conn              *websocket.Conn
+	done              chan struct{}
+	streamCancel      chan struct{}
+	status            string
+	onStatusChange    func(string)
 }
 
 func New(cfg *config.Config, enc *encoder.Encoder, inp *input.Handler) *Client {
@@ -49,13 +53,20 @@ func New(cfg *config.Config, enc *encoder.Encoder, inp *input.Handler) *Client {
 		initialStatus = StatusNotConfigured
 	}
 
+	mons := monitor.GetAllMonitors()
+	if len(mons) > 0 {
+		inp.SetMonitor(mons[0])
+	}
+
 	return &Client{
-		cfg:          cfg,
-		enc:          enc,
-		input:        inp,
-		done:         make(chan struct{}),
-		status:       initialStatus,
-		streamCancel: make(chan struct{}),
+		cfg:               cfg,
+		enc:               enc,
+		input:             inp,
+		monitors:          mons,
+		currentMonitorIdx: 0,
+		done:              make(chan struct{}),
+		status:            initialStatus,
+		streamCancel:      make(chan struct{}),
 	}
 }
 
@@ -179,6 +190,12 @@ func (c *Client) connect(serverURL, pcSecret string) error {
 				case "stop_stream":
 					c.stopStreaming()
 					continue
+				case "switch_monitor":
+					c.switchMonitor(-1)
+					continue
+				case "set_monitor":
+					c.switchMonitor(ctrl.Index)
+					continue
 				}
 			}
 			c.input.Handle(msg)
@@ -186,16 +203,72 @@ func (c *Client) connect(serverURL, pcSecret string) error {
 	}
 }
 
+func (c *Client) sendMonitorInfo(conn *websocket.Conn) {
+	c.mu.Lock()
+	count := len(c.monitors)
+	current := c.currentMonitorIdx
+	c.mu.Unlock()
+
+	msg, err := json.Marshal(map[string]any{
+		"type":    "monitor_info",
+		"count":   count,
+		"current": current + 1,
+	})
+	if err == nil && conn != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, msg)
+	}
+}
+
+func (c *Client) switchMonitor(targetIdx int) {
+	c.mu.Lock()
+	if len(c.monitors) == 0 {
+		c.monitors = monitor.GetAllMonitors()
+	}
+	if len(c.monitors) == 0 {
+		c.mu.Unlock()
+		return
+	}
+	if targetIdx >= 0 {
+		c.currentMonitorIdx = targetIdx % len(c.monitors)
+	} else {
+		c.currentMonitorIdx = (c.currentMonitorIdx + 1) % len(c.monitors)
+	}
+	activeMon := c.monitors[c.currentMonitorIdx]
+	conn := c.conn
+	isRunning := c.enc.IsRunning()
+	c.mu.Unlock()
+
+	c.input.SetMonitor(activeMon)
+
+	if conn != nil {
+		c.sendMonitorInfo(conn)
+	}
+
+	if isRunning && conn != nil {
+		c.stopStreaming()
+		c.startStreaming(conn)
+	}
+}
+
 func (c *Client) startStreaming(conn *websocket.Conn) {
 	c.mu.Lock()
 	quality := c.cfg.Quality
+	if len(c.monitors) == 0 {
+		c.monitors = monitor.GetAllMonitors()
+	}
+	if c.currentMonitorIdx >= len(c.monitors) {
+		c.currentMonitorIdx = 0
+	}
+	activeMon := c.monitors[c.currentMonitorIdx]
 	c.mu.Unlock()
+
+	c.input.SetMonitor(activeMon)
 
 	if c.enc.IsRunning() {
 		return
 	}
 
-	if err := c.enc.Start(quality); err != nil {
+	if err := c.enc.StartWithMonitor(quality, activeMon.Index, activeMon.Left, activeMon.Top, activeMon.Width, activeMon.Height); err != nil {
 		return
 	}
 
@@ -205,6 +278,7 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 	c.mu.Unlock()
 
 	c.setStatus(StatusStreaming)
+	c.sendMonitorInfo(conn)
 
 	go func() {
 		defer c.enc.Stop()

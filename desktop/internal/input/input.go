@@ -2,9 +2,12 @@ package input
 
 import (
 	"encoding/json"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"deskrift/internal/monitor"
 )
 
 var (
@@ -52,8 +55,10 @@ type InputEvent struct {
 }
 
 type Handler struct {
-	lastX int
-	lastY int
+	mu             sync.Mutex
+	lastX          int
+	lastY          int
+	currentMonitor monitor.Monitor
 }
 
 func New() *Handler {
@@ -61,6 +66,14 @@ func New() *Handler {
 		lastX: -1,
 		lastY: -1,
 	}
+}
+
+func (h *Handler) SetMonitor(m monitor.Monitor) {
+	h.mu.Lock()
+	h.currentMonitor = m
+	h.lastX = -1
+	h.lastY = -1
+	h.mu.Unlock()
 }
 
 func (h *Handler) Handle(data []byte) {
@@ -73,8 +86,10 @@ func (h *Handler) Handle(data []byte) {
 	case "mousemove":
 		h.mouseMove(event.X, event.Y)
 	case "mousedown":
+		h.mouseMove(event.X, event.Y)
 		h.mouseClick(event.Button, true)
 	case "mouseup":
+		h.mouseMove(event.X, event.Y)
 		h.mouseClick(event.Button, false)
 	case "wheel":
 		h.mouseWheel(event.Delta)
@@ -90,12 +105,31 @@ func (h *Handler) Handle(data []byte) {
 }
 
 func (h *Handler) mouseMove(x, y int) {
-	if h.lastX == x && h.lastY == y {
+	h.mu.Lock()
+	mon := h.currentMonitor
+	realX := mon.Left + x
+	realY := mon.Top + y
+	if mon.Width > 0 && x >= mon.Width {
+		realX = mon.Left + mon.Width - 1
+	}
+	if mon.Height > 0 && y >= mon.Height {
+		realY = mon.Top + mon.Height - 1
+	}
+	if realX < mon.Left {
+		realX = mon.Left
+	}
+	if realY < mon.Top {
+		realY = mon.Top
+	}
+	if h.lastX == realX && h.lastY == realY {
+		h.mu.Unlock()
 		return
 	}
-	h.lastX = x
-	h.lastY = y
-	procSetCursorPos.Call(uintptr(x), uintptr(y))
+	h.lastX = realX
+	h.lastY = realY
+	h.mu.Unlock()
+
+	procSetCursorPos.Call(uintptr(realX), uintptr(realY))
 }
 
 func (h *Handler) mouseClick(button string, down bool) {
