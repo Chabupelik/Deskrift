@@ -28,7 +28,6 @@ services:
       - "127.0.0.1:5060:8000"
     networks:
       - deskrift_internal
-      - common_net
     depends_on:
       redis:
         condition: service_healthy
@@ -38,5 +37,3 @@ volumes:
 
 networks:
   deskrift_internal:
-  common_net:
-    external: true
