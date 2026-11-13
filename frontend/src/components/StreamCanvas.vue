@@ -126,8 +126,6 @@ const isSupported = ref(typeof window !== 'undefined' && 'VideoDecoder' in windo
 const isDisconnected = ref(false)
 const currentMonitorNumber = ref(1)
 const monitorCount = ref(1)
-const canvasWidth = ref(1920)
-const canvasHeight = ref(1080)
 const isToolbarVisible = ref(false)
 
 let ws: WebSocket | null = null
