@@ -83,7 +83,7 @@
       </div>
     </div>
 
-    <div class="toolbar-trigger" @mouseenter="isToolbarVisible = true">
+    <div class="toolbar-trigger" @mouseenter="isToolbarVisible = true" @copy.stop.prevent @cut.stop.prevent>
       <div
         class="toolbar"
         :class="{ visible: isToolbarVisible }"
@@ -295,12 +295,6 @@ onMounted(async () => {
 
   decoder = new VideoDecoder({
     output(frame) {
-      if (frame.displayWidth && frame.displayWidth !== canvas.width) {
-        canvas.width = frame.displayWidth
-      }
-      if (frame.displayHeight && frame.displayHeight !== canvas.height) {
-        canvas.height = frame.displayHeight
-      }
       ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
       frame.close()
     },
