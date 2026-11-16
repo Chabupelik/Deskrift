@@ -47,7 +47,7 @@ func buildDDAArgs(quality string, outputIdx int) []string {
 	if !ok {
 		p = qualityProfiles["high"]
 	}
-	filter := fmt.Sprintf("ddagrab=output_idx=%d:framerate=%d:draw_mouse=1", outputIdx, p.FPS)
+	filter := fmt.Sprintf("ddagrab=output_idx=%d:framerate=%d:draw_mouse=0", outputIdx, p.FPS)
 	if p.ScaleWidth > 0 {
 		filter += fmt.Sprintf(",scale=%d:-2", p.ScaleWidth)
 	}

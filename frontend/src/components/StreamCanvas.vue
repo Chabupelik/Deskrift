@@ -349,6 +349,8 @@ onMounted(async () => {
         } else if (msg.type === 'monitor_info') {
           if (typeof msg.current === 'number') currentMonitorNumber.value = msg.current
           if (typeof msg.count === 'number') monitorCount.value = msg.count
+        } else if (msg.type === 'cursor' && msg.css && canvas) {
+          canvas.style.cursor = msg.css
         }
       } catch (err) {
         console.error('Failed to parse control message:', err)
@@ -441,7 +443,7 @@ onUnmounted(() => {
   max-height: 100vh;
   aspect-ratio: 16 / 9;
   object-fit: contain;
-  cursor: none;
+  cursor: default;
   display: block;
 }
 

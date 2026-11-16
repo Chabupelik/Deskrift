@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"deskrift/internal/config"
+	"deskrift/internal/cursor"
 	"deskrift/internal/encoder"
 	"deskrift/internal/input"
 	"deskrift/internal/monitor"
@@ -314,6 +315,33 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 
 			if err := activeConn.WriteMessage(websocket.BinaryMessage, payload); err != nil {
 				return
+			}
+		}
+	}()
+
+	// Cursor shape polling goroutine — 20 updates/sec, tiny JSON messages
+	go func() {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		lastCSS := ""
+		for {
+			select {
+			case <-cancel:
+				return
+			case <-ticker.C:
+				c.mu.Lock()
+				activeConn := c.conn
+				c.mu.Unlock()
+				if activeConn == nil {
+					return
+				}
+				css := cursor.GetCSS()
+				if css == lastCSS {
+					continue
+				}
+				lastCSS = css
+				msg, _ := json.Marshal(map[string]string{"type": "cursor", "css": css})
+				_ = activeConn.WriteMessage(websocket.TextMessage, msg)
 			}
 		}
 	}()
