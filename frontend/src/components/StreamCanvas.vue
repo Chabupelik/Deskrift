@@ -441,7 +441,7 @@ onUnmounted(() => {
   max-height: 100vh;
   aspect-ratio: 16 / 9;
   object-fit: contain;
-  cursor: default;
+  cursor: none;
   display: block;
 }
 
