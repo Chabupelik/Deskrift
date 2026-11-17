@@ -34,6 +34,11 @@ type ControlMessage struct {
 	Index int    `json:"index,omitempty"`
 }
 
+type writeMsg struct {
+	msgType int
+	data    []byte
+}
+
 type Client struct {
 	mu                sync.Mutex
 	cfg               *config.Config
@@ -44,6 +49,7 @@ type Client struct {
 	conn              *websocket.Conn
 	done              chan struct{}
 	streamCancel      chan struct{}
+	writeCh           chan writeMsg
 	status            string
 	onStatusChange    func(string)
 }
@@ -68,6 +74,7 @@ func New(cfg *config.Config, enc *encoder.Encoder, inp *input.Handler) *Client {
 		done:              make(chan struct{}),
 		status:            initialStatus,
 		streamCancel:      make(chan struct{}),
+		writeCh:           nil,
 	}
 }
 
@@ -208,6 +215,7 @@ func (c *Client) sendMonitorInfo(conn *websocket.Conn) {
 	c.mu.Lock()
 	count := len(c.monitors)
 	current := c.currentMonitorIdx
+	wch := c.writeCh
 	c.mu.Unlock()
 
 	msg, err := json.Marshal(map[string]any{
@@ -215,7 +223,15 @@ func (c *Client) sendMonitorInfo(conn *websocket.Conn) {
 		"count":   count,
 		"current": current + 1,
 	})
-	if err == nil && conn != nil {
+	if err != nil || conn == nil {
+		return
+	}
+	if wch != nil {
+		select {
+		case wch <- writeMsg{websocket.TextMessage, msg}:
+		default:
+		}
+	} else {
 		_ = conn.WriteMessage(websocket.TextMessage, msg)
 	}
 }
@@ -281,8 +297,26 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 	c.setStatus(StatusStreaming)
 	c.sendMonitorInfo(conn)
 
+	// Single writer goroutine — gorilla/websocket forbids concurrent writes
+	writeCh := make(chan writeMsg, 128)
+	c.mu.Lock()
+	c.writeCh = writeCh
+	c.mu.Unlock()
+
 	go func() {
-		defer c.enc.Stop()
+		for m := range writeCh {
+			if err := conn.WriteMessage(m.msgType, m.data); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Video frame reader goroutine
+	go func() {
+		defer func() {
+			c.enc.Stop()
+			close(writeCh)
+		}()
 		reader := encoder.NewFrameReader(c.enc.Stdout)
 
 		for {
@@ -300,7 +334,6 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 			c.mu.Lock()
 			activeConn := c.conn
 			c.mu.Unlock()
-
 			if activeConn == nil {
 				return
 			}
@@ -308,18 +341,18 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 			payload := make([]byte, 1+len(frame.Data))
 			if frame.IsKey {
 				payload[0] = 1
-			} else {
-				payload[0] = 0
 			}
 			copy(payload[1:], frame.Data)
 
-			if err := activeConn.WriteMessage(websocket.BinaryMessage, payload); err != nil {
+			select {
+			case writeCh <- writeMsg{websocket.BinaryMessage, payload}:
+			case <-cancel:
 				return
 			}
 		}
 	}()
 
-	// Cursor shape polling goroutine — 20 updates/sec, tiny JSON messages
+	// Cursor shape polling goroutine — sends only on change, ~20/sec
 	go func() {
 		ticker := time.NewTicker(50 * time.Millisecond)
 		defer ticker.Stop()
@@ -341,7 +374,11 @@ func (c *Client) startStreaming(conn *websocket.Conn) {
 				}
 				lastCSS = css
 				msg, _ := json.Marshal(map[string]string{"type": "cursor", "css": css})
-				_ = activeConn.WriteMessage(websocket.TextMessage, msg)
+				select {
+				case writeCh <- writeMsg{websocket.TextMessage, msg}:
+				case <-cancel:
+					return
+				}
 			}
 		}
 	}()
@@ -356,6 +393,7 @@ func (c *Client) stopStreaming() {
 			close(c.streamCancel)
 		}
 	}
+	c.writeCh = nil
 	c.mu.Unlock()
 
 	c.enc.Stop()
