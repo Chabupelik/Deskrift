@@ -1,5 +1,5 @@
 <template>
-  <div class="stream-container" ref="containerRef" tabindex="0" @keydown="onKeyDown" @keyup="onKeyUp" @paste="onPaste">
+  <div class="stream-container" ref="containerRef" tabindex="0" @keydown="onKeyDown" @keyup="onKeyUp">
     <div class="canvas-wrapper">
       <canvas
         ref="canvasRef"
@@ -246,6 +246,18 @@ function onWheel(e: WheelEvent) {
 
 function onKeyDown(e: KeyboardEvent) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
+
+  // Ctrl+Shift+V → send local clipboard text to remote PC (explicit bridge)
+  if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+    e.preventDefault()
+    navigator.clipboard.readText().then((text) => {
+      if (text && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'clipboard', text }))
+      }
+    }).catch(() => {})
+    return
+  }
+
   if (e.key === 'Tab' || e.key === 'Alt' || e.key.startsWith('F')) {
     e.preventDefault()
   }
@@ -255,14 +267,6 @@ function onKeyDown(e: KeyboardEvent) {
 function onKeyUp(e: KeyboardEvent) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
   ws.send(JSON.stringify({ type: 'keyup', key: e.keyCode }))
-}
-
-function onPaste(e: ClipboardEvent) {
-  if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
-  const text = e.clipboardData?.getData('text')
-  if (text) {
-    ws.send(JSON.stringify({ type: 'clipboard', text }))
-  }
 }
 
 function switchMonitor() {
