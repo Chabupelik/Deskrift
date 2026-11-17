@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -16,6 +17,7 @@ from app.api.dependencies import get_client_ip
 from app.api.v1 import auth, stream
 from app.core.config import get_settings
 from app.db.redis import RedisClient, close_redis_pool, get_raw_redis_client
+from app.integrations.telegram import telegram_client
 from app.schemas.common import ResponseError, ResponseOK
 
 logging.basicConfig(
@@ -25,6 +27,15 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("deskrift_api")
+
+_SENSITIVE_PARAMS = re.compile(
+    r"((?:^|&)(?:token|secret|password|key)=)[^&]*", re.IGNORECASE
+)
+
+
+def _mask_query(query: str) -> str:
+    """Replace values of sensitive query parameters with *** in log output."""
+    return _SENSITIVE_PARAMS.sub(r"\1***", query)
 
 
 @asynccontextmanager
@@ -43,6 +54,12 @@ async def lifespan(app: FastAPI):
         logger.info("Redis connection closed cleanly")
     except Exception as e:
         logger.error("Error during connection teardown: %s", e)
+
+    try:
+        await telegram_client.close()
+        logger.info("Telegram HTTP client closed cleanly")
+    except Exception as e:
+        logger.error("Error closing Telegram HTTP client: %s", e)
 
 
 settings = get_settings()
@@ -75,7 +92,7 @@ async def log_requests_middleware(request: Request, call_next):
     process_time_ms = (time.time() - start_time) * 1000
     client_ip = get_client_ip(request)
     url_path = (
-        f"{request.url.path}?{request.url.query}"
+        f"{request.url.path}?{_mask_query(request.url.query)}"
         if request.url.query
         else request.url.path
     )

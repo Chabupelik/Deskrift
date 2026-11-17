@@ -109,13 +109,13 @@ const state = ref<LoginState>('idle')
 const countdown = ref(120)
 const errorMessage = ref('')
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
+let evtSource: EventSource | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 function cleanupTimers() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+  if (evtSource) {
+    evtSource.close()
+    evtSource = null
   }
   if (countdownTimer) {
     clearInterval(countdownTimer)
@@ -142,26 +142,36 @@ async function startLogin() {
       }
     }, 1000)
 
-    pollTimer = setInterval(async () => {
+    // Replace polling with a single SSE connection — server pushes status every ~500 ms
+    const src = new EventSource(`/api/v1/auth/login/${data.login_id}/events`)
+    evtSource = src
+
+    src.onmessage = (event) => {
       try {
-        const checkRes = await authApi.checkLogin(data.login_id)
-        if (checkRes.data.status === 'approved' && checkRes.data.access_token) {
+        const msg: { status: string; access_token?: string } = JSON.parse(event.data)
+        if (msg.status === 'approved' && msg.access_token) {
           cleanupTimers()
-          auth.setToken(checkRes.data.access_token)
+          auth.setToken(msg.access_token)
           router.push('/stream')
-        } else if (checkRes.data.status === 'rejected') {
+        } else if (msg.status === 'rejected') {
           cleanupTimers()
           state.value = 'rejected'
-        } else if (checkRes.data.status === 'expired') {
+        } else if (msg.status === 'expired') {
           cleanupTimers()
           state.value = 'expired'
         }
-      } catch (err: any) {
-        cleanupTimers()
-        state.value = 'error'
-        errorMessage.value = err.response?.data?.message || 'Ошибка соединения с сервером'
+        // 'pending' — do nothing, wait for next event
+      } catch {
+        // malformed event — ignore
       }
-    }, 1500)
+    }
+
+    src.onerror = () => {
+      if (state.value !== 'waiting') return
+      cleanupTimers()
+      state.value = 'error'
+      errorMessage.value = 'Ошибка соединения с сервером'
+    }
   } catch (err: any) {
     state.value = 'error'
     const status = err.response?.status

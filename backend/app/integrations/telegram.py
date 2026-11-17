@@ -14,6 +14,10 @@ class TelegramClient:
     def __init__(self, token: str | None = None) -> None:
         self.token = token or get_settings().telegram_bot_token
         self.base_url = f"https://api.telegram.org/bot{self.token}"
+        self._client = httpx.AsyncClient(timeout=5.0)
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
     async def send_message(
         self,
@@ -34,12 +38,11 @@ class TelegramClient:
             payload["reply_markup"] = reply_markup
 
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                res = await client.post(url, json=payload)
-                data = res.json()
-                if data.get("ok"):
-                    return data.get("result", {}).get("message_id")
-                logger.error("Telegram send_message failed: %s", data)
+            res = await self._client.post(url, json=payload)
+            data = res.json()
+            if data.get("ok"):
+                return data.get("result", {}).get("message_id")
+            logger.error("Telegram send_message failed: %s", data)
         except Exception as e:
             logger.error("Telegram request error: %s", e)
         return None
@@ -65,11 +68,10 @@ class TelegramClient:
             payload["reply_markup"] = reply_markup
 
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                res = await client.post(url, json=payload)
-                data = res.json()
-                if not data.get("ok"):
-                    logger.error("Telegram edit_message_text failed: %s", data)
+            res = await self._client.post(url, json=payload)
+            data = res.json()
+            if not data.get("ok"):
+                logger.error("Telegram edit_message_text failed: %s", data)
         except Exception as e:
             logger.error("Telegram edit_message_text error: %s", e)
 
@@ -89,11 +91,10 @@ class TelegramClient:
             payload["text"] = text
 
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                res = await client.post(url, json=payload)
-                data = res.json()
-                if not data.get("ok"):
-                    logger.error("Telegram answer_callback_query failed: %s", data)
+            res = await self._client.post(url, json=payload)
+            data = res.json()
+            if not data.get("ok"):
+                logger.error("Telegram answer_callback_query failed: %s", data)
         except Exception as e:
             logger.error("Telegram answer_callback_query error: %s", e)
 
