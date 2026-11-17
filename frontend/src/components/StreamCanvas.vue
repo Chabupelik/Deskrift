@@ -230,11 +230,18 @@ function onPointerUp(e: PointerEvent) {
   sendMouseEvent('mouseup', e, button)
 }
 
+// Common modifier keyCodes to release on blur so nothing gets stuck on remote
+const MODIFIER_KEYCODES = [16, 17, 18, 91, 92, 93] // Shift, Ctrl, Alt, LWin, RWin, Menu
+
 function onWindowBlur() {
   if (ws && ws.readyState === WebSocket.OPEN && stream.pcOnline) {
     ws.send(JSON.stringify({ type: 'mouseup', button: 'left' }))
     ws.send(JSON.stringify({ type: 'mouseup', button: 'right' }))
     ws.send(JSON.stringify({ type: 'mouseup', button: 'middle' }))
+    // Release all modifier keys so nothing sticks on remote
+    for (const key of MODIFIER_KEYCODES) {
+      ws.send(JSON.stringify({ type: 'keyup', key }))
+    }
   }
 }
 
@@ -243,6 +250,9 @@ function onWheel(e: WheelEvent) {
   const delta = e.deltaY < 0 ? 120 : -120
   ws.send(JSON.stringify({ type: 'wheel', delta }))
 }
+
+// Keys that must be suppressed at browser level to avoid browser UI interference
+const SUPPRESS_KEYS = new Set(['Alt', 'Meta', 'Tab'])
 
 function onKeyDown(e: KeyboardEvent) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
@@ -258,14 +268,26 @@ function onKeyDown(e: KeyboardEvent) {
     return
   }
 
-  if (e.key === 'Tab' || e.key === 'Alt' || e.key.startsWith('F')) {
+  // Suppress browser-level behavior for special keys
+  if (SUPPRESS_KEYS.has(e.key) || e.key.startsWith('F')) {
     e.preventDefault()
   }
+
   ws.send(JSON.stringify({ type: 'keydown', key: e.keyCode }))
+
+  // Win/Meta: browser loses focus on keyup so it never arrives → send keyup immediately
+  // to prevent key from getting stuck on remote PC
+  if (e.key === 'Meta') {
+    ws.send(JSON.stringify({ type: 'keyup', key: e.keyCode }))
+  }
 }
 
 function onKeyUp(e: KeyboardEvent) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !stream.pcOnline) return
+  // Prevent Alt from activating browser menu/tab switching on keyup
+  if (SUPPRESS_KEYS.has(e.key) || e.key.startsWith('F')) {
+    e.preventDefault()
+  }
   ws.send(JSON.stringify({ type: 'keyup', key: e.keyCode }))
 }
 
